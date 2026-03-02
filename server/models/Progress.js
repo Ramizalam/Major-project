@@ -14,7 +14,15 @@ const progressSchema = new mongoose.Schema({
     Listening: { type: Number, default: 0 },
     Speaking: { type: Number, default: 0 },
     FullMock: { type: Number, default: 0 }
-  }
+  },
+  // NEW: Store the 30-Day AI Generated Plan
+  customPlan: [{
+    day: Number,
+    title: String,
+    tasks: [String],
+    searchQuery: String,
+    isCompleted: { type: Boolean, default: false }
+  }]
 });
 
 module.exports = mongoose.model('Progress', progressSchema);

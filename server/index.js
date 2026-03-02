@@ -14,6 +14,8 @@ app.use(express.json());
 
 const authRoutes = require('./routes/auth');
 app.use('/api/auth', authRoutes);
+const analyticsRoutes = require('./routes/analytics');
+app.use('/api/analytics', analyticsRoutes);
 
 // Serve static files from public directory
 app.use('/public', express.static('public'));

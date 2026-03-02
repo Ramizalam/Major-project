@@ -622,11 +622,60 @@ function getPerformanceLevel(score) {
   if (score >= 4.0) return 'Limited';
   return 'Poor';
 }
+/**
+ * Generate a personalized 30-day study plan using Gemini API
+ */
+async function generatePersonalizedStudyPlan(level, weakAreas) {
+  const prompt = `You are an expert IELTS tutor. Create a highly customized, intensive 30-day study plan for a student whose current level is "${level}". 
+  Their weakest areas based on a diagnostic test are: ${weakAreas.join(', ')}.
+  
+  You MUST return an array of exactly 30 JSON objects (Day 1 to Day 30).
+  Format:
+  [
+    {
+      "day": 1,
+      "title": "Mastering True/False/Not Given",
+      "tasks": ["Actionable task 1", "Actionable task 2"],
+      "searchQuery": "IELTS Reading True False Not Given strategies"
+    }
+  ]
+  
+  Rules:
+  1. Days 1-10 must heavily target their specific weak areas.
+  2. Days 11-20 should build advanced vocabulary and complex grammar structures.
+  3. Days 21-30 should focus on full mock tests, timing, and advanced strategies.`;
 
+  try {
+    const modelName = await getWorkingModel();
+    const result = await executeWithRetry(async () => {
+      return await ai.models.generateContent({
+        model: modelName,
+        contents: prompt,
+        config: {
+          responseMimeType: "application/json" // THIS PREVENTS THE API FROM CRASHING
+        }
+      });
+    });
+
+    return JSON.parse(result.text);
+  } catch (error) {
+    console.error('Error generating 30-day plan:', error);
+    // Bulletproof fallback so the app never crashes
+    return Array.from({ length: 30 }, (_, i) => ({
+      day: i + 1,
+      title: `IELTS Core Practice Day ${i + 1}`,
+      tasks: ['Complete 1 Reading Passage', 'Review Vocabulary'],
+      searchQuery: 'IELTS daily practice test'
+    }));
+  }
+}
+
+// Make sure this is exported at the very bottom!
 module.exports = {
   generateListeningFeedback,
   generateReadingFeedback,
   generateWritingFeedback,
   generateSpeakingFeedback,
-  getPerformanceLevel
+  getPerformanceLevel,
+  generatePersonalizedStudyPlan 
 };
