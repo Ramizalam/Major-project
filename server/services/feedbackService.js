@@ -621,8 +621,7 @@ function getPerformanceLevel(score) {
   if (score >= 5.0) return 'Adequate';
   if (score >= 4.0) return 'Limited';
   return 'Poor';
-}
-/**
+}/**
  * Generate a personalized 30-day study plan using Gemini API
  */
 async function generatePersonalizedStudyPlan(level, weakAreas) {
@@ -647,12 +646,15 @@ async function generatePersonalizedStudyPlan(level, weakAreas) {
 
   try {
     const modelName = await getWorkingModel();
+    // Initialize AI instance
+    const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+    
     const result = await executeWithRetry(async () => {
       return await ai.models.generateContent({
         model: modelName,
         contents: prompt,
         config: {
-          responseMimeType: "application/json" // THIS PREVENTS THE API FROM CRASHING
+          responseMimeType: "application/json" // THIS STOPS THE CRASHES
         }
       });
     });
@@ -660,7 +662,7 @@ async function generatePersonalizedStudyPlan(level, weakAreas) {
     return JSON.parse(result.text);
   } catch (error) {
     console.error('Error generating 30-day plan:', error);
-    // Bulletproof fallback so the app never crashes
+    // Bulletproof fallback plan
     return Array.from({ length: 30 }, (_, i) => ({
       day: i + 1,
       title: `IELTS Core Practice Day ${i + 1}`,
@@ -670,12 +672,12 @@ async function generatePersonalizedStudyPlan(level, weakAreas) {
   }
 }
 
-// Make sure this is exported at the very bottom!
+// Make sure this is exactly how your exports look at the bottom!
 module.exports = {
   generateListeningFeedback,
   generateReadingFeedback,
   generateWritingFeedback,
   generateSpeakingFeedback,
   getPerformanceLevel,
-  generatePersonalizedStudyPlan 
+  generatePersonalizedStudyPlan // <--- MUST BE EXPORTED
 };

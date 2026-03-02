@@ -13,26 +13,28 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<any>(null);
   const [isAdmin, setIsAdmin] = useState(false);
-  const [loading, setLoading] = useState(true); // <-- This is the magic fix!
+  const [loading, setLoading] = useState(true); // <--- Loading state added
 
   useEffect(() => {
-    // On refresh, check local storage before rendering the app
     const initAuth = () => {
       const token = localStorage.getItem('token');
       const savedUser = localStorage.getItem('user');
 
-      // Make sure the token is actually a real token, not a glitchy "undefined" string
+      // Reject corrupted tokens
       if (token && token !== 'undefined' && token !== 'null' && savedUser && savedUser !== 'undefined') {
         try {
           const parsedUser = JSON.parse(savedUser);
           setUser(parsedUser);
           setIsAdmin(parsedUser?.role === 'admin');
         } catch (error) {
-          console.error("Failed to parse user from local storage", error);
+          console.error("Failed to parse user", error);
         }
+      } else {
+        // If the token is fake/glitched, wipe it out immediately
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
       }
-      // Tell the app it is done checking, so it can safely render the screens
-      setLoading(false); 
+      setLoading(false); // Done checking
     };
 
     initAuth();

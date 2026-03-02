@@ -31,15 +31,19 @@ const AuthScreen: React.FC = () => {
     return score;
   };
   const strength = getPasswordStrength();
-
-  const handleMainSubmit = async (e: React.FormEvent) => {
+const handleMainSubmit = async (e: React.FormEvent) => {
     e.preventDefault(); setError(''); setMessage(''); setLoading(true);
     try {
       if (mode === 'login') {
         const res = await fetch('http://localhost:5000/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password }) });
         const data = await res.json();
         if (!res.ok) throw new Error(data.message);
-        login(data); navigate('/selection');
+        
+        // FIX: The backend sends a flat object, so we separate the token from the user details
+        const { token, ...userData } = data;
+        login(userData, token); 
+        navigate('/selection');
+        
       } else if (mode === 'register') {
         if (password !== confirmPassword) throw new Error("Passwords do not match");
         if (strength < 3) throw new Error("Please choose a stronger password");
@@ -47,16 +51,23 @@ const AuthScreen: React.FC = () => {
         const data = await res.json();
         if (!res.ok) throw new Error(data.message);
         setMessage(data.message); setMode('verify');
+        
       } else if (mode === 'verify') {
         const res = await fetch('http://localhost:5000/api/auth/verify-otp', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, otp }) });
         const data = await res.json();
         if (!res.ok) throw new Error(data.message);
-        login(data); navigate('/selection');
+        
+        // FIX: The backend sends a flat object here too!
+        const { token, ...userData } = data;
+        login(userData, token); 
+        navigate('/selection');
+        
       } else if (mode === 'forgot') {
         const res = await fetch('http://localhost:5000/api/auth/forgot-password', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email }) });
         const data = await res.json();
         if (!res.ok) throw new Error(data.message);
         setMessage(data.message); setMode('reset');
+        
       } else if (mode === 'reset') {
         if (password !== confirmPassword) throw new Error("Passwords do not match");
         const res = await fetch('http://localhost:5000/api/auth/reset-password', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, otp, newPassword: password }) });

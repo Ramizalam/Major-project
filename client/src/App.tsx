@@ -71,23 +71,20 @@ export interface TestResults {
     evaluation?: SpeakingEvaluation;
   };
 }
-
 // ==========================================
 // PROTECTED ROUTE WRAPPER
 // ==========================================
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { user, loading } = useAuth();
   
-  // Wait for the AuthContext to finish checking local storage
   if (loading) {
     return (
-      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#020617', color: '#06b6d4' }}>
-        <h2>Loading your profile...</h2>
+      <div className="min-h-screen bg-slate-900 flex items-center justify-center text-cyan-400">
+        <h2>Loading your secure profile...</h2>
       </div>
     );
   }
 
-  // If loading is done and there is still no user, kick them out
   if (!user) {
     return <Navigate to="/auth" replace />;
   }

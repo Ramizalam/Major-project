@@ -47,7 +47,6 @@ const PreparationScreen: React.FC = () => {
   const [quizStep, setQuizStep] = useState(0);
   const [answers, setAnswers] = useState({ reading: 0, listening: 0, grammar: 0 });
 
-  // Load Syllabus Checkboxes from Local Storage
   const [completedItems, setCompletedItems] = useState<string[]>(() => {
     const saved = localStorage.getItem('ielts_syllabus_progress');
     return saved ? JSON.parse(saved) : [];
@@ -61,14 +60,12 @@ const PreparationScreen: React.FC = () => {
     setCompletedItems(prev => prev.includes(item) ? prev.filter(i => i !== item) : [...prev, item]);
   };
 
-useEffect(() => {
+  useEffect(() => {
     const fetchDashboard = async () => {
       try {
         let token = localStorage.getItem('token');
-        if (!token || token === 'undefined' || token === 'null') {
-          localStorage.removeItem('token'); // Force clean corrupted tokens
-          return;
-        }
+        if (!token) return;
+        
         const res = await axios.get('http://localhost:5000/api/analytics/dashboard', { headers: { Authorization: `Bearer ${token}` } });
         if (res.data.progress?.customPlan?.length > 0) {
           setCustomPlan(res.data.progress.customPlan);
@@ -82,7 +79,7 @@ useEffect(() => {
   const handleManualSelection = async (level: string) => {
     setAppState('analyzing');
     setUserLevel(level);
-    const defaultWeakAreas = level === 'Beginner' ? ["Basic Grammar", "Reading"] : ["Advanced Lexical Resource", "Task 2 Structure"];
+    const defaultWeakAreas = level === 'Beginner' ? ["Basic Grammar", "Reading Strategies"] : ["Advanced Lexical Resource", "Task 2 Structure"];
     await generateAIPlan(level, defaultWeakAreas);
   };
 
@@ -96,30 +93,23 @@ useEffect(() => {
     } else {
       setAppState('analyzing');
       const totalScore = answers.reading + answers.grammar + answers.listening + (isCorrect ? 1 : 0);
-      let calculatedLevel = totalScore >= 5 ? 'Advanced' : (totalScore >= 3 ? 'Intermediate' : 'Beginner');
+      let calculatedLevel = totalScore >= 5 ? 'Advanced (Band 7.5+)' : (totalScore >= 3 ? 'Intermediate (Band 6.0-7.0)' : 'Beginner');
       setUserLevel(calculatedLevel);
 
       const weakAreas = [];
-      if (answers.reading < 2) weakAreas.push("Reading Comprehension");
-      if (answers.grammar < 2) weakAreas.push("Advanced Grammar");
-      if (answers.listening < 2) weakAreas.push("Listening Detail Retention");
+      if (answers.reading < 2) weakAreas.push("Reading Comprehension & Inference");
+      if (answers.grammar < 2) weakAreas.push("Advanced Grammar & Vocabulary");
+      if (answers.listening < 2) weakAreas.push("Listening Distractors");
       if (weakAreas.length === 0) weakAreas.push("Timing Optimization");
 
       await generateAIPlan(calculatedLevel, weakAreas);
     }
   };
-const generateAIPlan = async (level: string, weakAreas: string[]) => {
+
+  const generateAIPlan = async (level: string, weakAreas: string[]) => {
     try {
       let token = localStorage.getItem('token');
       
-      // If the browser corrupted the token, force them to log in cleanly ONE time.
-      if (!token || token === 'undefined' || token === 'null') {
-        localStorage.clear(); // Nuke all corrupted data
-        alert("Your session expired. Please log in again to generate your AI plan.");
-        navigate('/auth');
-        return;
-      }
-
       const res = await axios.post('http://localhost:5000/api/analytics/generate-plan', 
         { level, weakAreas }, { headers: { Authorization: `Bearer ${token}` } }
       );
@@ -128,7 +118,7 @@ const generateAIPlan = async (level: string, weakAreas: string[]) => {
       setAppState('dashboard');
     } catch (err) {
       console.error(err);
-      alert("Failed to connect to AI server. Check your backend terminal for errors!");
+      alert("AI Generation took too long or backend is asleep. Try again.");
       setAppState('onboarding');
       setQuizStep(0);
     }
@@ -185,6 +175,7 @@ const generateAIPlan = async (level: string, weakAreas: string[]) => {
 
             {activeTab === 'plan' && (
               <div className="plan-grid">
+                <div className="level-indicator">Level: <span style={{color: '#06b6d4', fontWeight: 'bold'}}>{userLevel}</span></div>
                 <div className="thirty-day-scroll">
                   {customPlan.map((day, index) => (
                     <div key={index} className="day-card glass-panel">
