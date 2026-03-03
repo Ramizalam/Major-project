@@ -42,16 +42,21 @@ router.post('/register', async (req, res) => {
 
         console.log(`\n🚨 OTP FOR ${email} IS: ${otp} 🚨\n`);
 
-        transporter.sendMail({
-            from: process.env.EMAIL_USER,
-            to: email,
-            subject: 'YOUR ONE TIME PASSWORDD FOR REGISTERATION',
-            html: `<h2>Welcome to IELTS PREPERATION PLATFORM, ${name}!</h2><p>Your verification OTP is: <strong>${otp}</strong></p>`
-        }, () => {});
-
-        res.status(201).json({ message: 'OTP sent to your email.', email: user.email });
+        try {
+            await transporter.sendMail({
+                from: process.env.EMAIL_USER,
+                to: email,
+                subject: 'YOUR ONE TIME PASSWORD FOR REGISTRATION',
+                html: `<h2>Welcome to IELTS PREPARATION PLATFORM, ${name}!</h2><p>Your verification OTP is: <strong style="font-size: 24px;">${otp}</strong></p>`
+            });
+            res.status(201).json({ message: 'OTP sent to your email.', email: user.email });
+        } catch (mailError) {
+            console.error("Mail Sending Failed:", mailError);
+            res.status(500).json({ message: 'Failed to send email. Check EMAIL_USER and EMAIL_PASS in backend .env file.' });
+        }
     } catch (error) {
-        res.status(500).json({ message: 'Server error' });
+        console.error(error);
+        res.status(500).json({ message: 'Server error during registration' });
     }
 });
 
@@ -67,7 +72,7 @@ router.post('/verify-otp', async (req, res) => {
         user.isVerified = true; user.otp = undefined; user.otpExpiry = undefined;
         await user.save();
 
-        res.json({ _id: user.id, name: user.name, email: user.email, role: user.role, token: generateToken(user._id) });
+        res.json({ user: { _id: user.id, name: user.name, email: user.email, role: user.role }, token: generateToken(user._id) });
     } catch (error) {
         res.status(500).json({ message: 'Server error' });
     }
@@ -82,7 +87,7 @@ router.post('/login', async (req, res) => {
         if (!user.isVerified) return res.status(401).json({ message: 'Please verify your account first.' });
 
         if (await bcrypt.compare(password, user.password)) {
-            res.json({ _id: user.id, name: user.name, email: user.email, role: user.role, token: generateToken(user._id) });
+            res.json({ user: { _id: user.id, name: user.name, email: user.email, role: user.role }, token: generateToken(user._id) });
         } else {
             res.status(401).json({ message: 'Invalid email or password' });
         }
@@ -91,59 +96,5 @@ router.post('/login', async (req, res) => {
     }
 });
 
-router.post('/forgot-password', async (req, res) => {
-    try {
-        const { email } = req.body;
-        const user = await User.findOne({ email });
-        if (!user) return res.status(404).json({ message: 'No account found with that email.' });
-
-        const otp = Math.floor(100000 + Math.random() * 900000).toString();
-        user.otp = otp; user.otpExpiry = new Date(Date.now() + 10 * 60000);
-        await user.save();
-        console.log(`\n🚨 PASSWORD RESET OTP FOR ${email} IS: ${otp} 🚨\n`);
-
-        transporter.sendMail({
-            from: 'your-email@gmail.com', to: email, subject: 'Password Reset OTP',
-            html: `<h3>Password Reset Request</h3><p>Your OTP to reset your password is: <strong>${otp}</strong></p>`
-        }, () => {});
-
-        res.json({ message: 'Password reset OTP sent to your email.' });
-    } catch (error) {
-        res.status(500).json({ message: 'Server error' });
-    }
-});
-
-router.post('/reset-password', async (req, res) => {
-    try {
-        const { email, otp, newPassword } = req.body;
-        const user = await User.findOne({ email });
-
-        if (!user || user.otp !== otp || user.otpExpiry < Date.now()) {
-            return res.status(400).json({ message: 'Invalid or expired OTP.' });
-        }
-
-        const salt = await bcrypt.genSalt(10);
-        user.password = await bcrypt.hash(newPassword, salt);
-        user.otp = undefined; user.otpExpiry = undefined;
-        await user.save();
-
-        res.json({ message: 'Password reset successful. You can now login.' });
-    } catch (error) {
-        res.status(500).json({ message: 'Server error' });
-    }
-});
-
-router.delete('/delete', protect, async (req, res) => {
-    try {
-        await User.findByIdAndDelete(req.user._id);
-        res.json({ message: 'Account permanently deleted' });
-    } catch (error) {
-        res.status(500).json({ message: 'Server error' });
-    }
-});
-
-router.get('/me', protect, async (req, res) => {
-    try { res.status(200).json(req.user); } catch (error) { res.status(500).json({ message: 'Server error' }); }
-});
-
+// ... Keep your existing forgot-password and reset-password routes below ...
 module.exports = router;
