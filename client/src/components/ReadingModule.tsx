@@ -1,15 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { BookOpen, AlertCircle, ChevronLeft, ChevronRight } from 'lucide-react';
+import { BookOpen, AlertCircle, ChevronLeft, ChevronRight, ArrowLeft } from 'lucide-react';
 import Timer from './Timer';
 import axios from 'axios';
 
 interface ReadingModuleProps {
   testId?: string;
   onComplete: (results: { score: number; answers: (string | number)[]; timeSpent: number }) => void;
+  onCancel?: () => void; // FIX: Receive cancel function
 }
 
-const ReadingModule: React.FC<ReadingModuleProps> = ({ testId, onComplete }) => {
+const ReadingModule: React.FC<ReadingModuleProps> = ({ testId, onComplete, onCancel }) => {
   const [test, setTest] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -17,8 +18,7 @@ const ReadingModule: React.FC<ReadingModuleProps> = ({ testId, onComplete }) => 
   const [answers, setAnswers] = useState<Record<string, string>>({});
 
   useEffect(() => {
-    let isMounted = true; // Prevent duplicate state updates
-
+    let isMounted = true; 
     const fetchTest = async () => {
       try {
         setLoading(true);
@@ -28,9 +28,7 @@ const ReadingModule: React.FC<ReadingModuleProps> = ({ testId, onComplete }) => 
           
         const res = await axios.get(url);
         const testData = Array.isArray(res.data) ? res.data[0] : res.data;
-        
         if (!testData) throw new Error('No reading test found');
-        
         if (isMounted) setTest(testData);
       } catch (err: any) {
         if (isMounted) setError(err.message || 'Failed to load reading test');
@@ -39,7 +37,6 @@ const ReadingModule: React.FC<ReadingModuleProps> = ({ testId, onComplete }) => 
       }
     };
     fetchTest();
-
     return () => { isMounted = false; };
   }, [testId]);
 
@@ -71,22 +68,29 @@ const ReadingModule: React.FC<ReadingModuleProps> = ({ testId, onComplete }) => 
   return (
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="max-w-6xl mx-auto p-6">
       <div className="bg-white rounded-2xl shadow-xl overflow-hidden border border-slate-100">
+        
+        {/* FIX: Add the visual Back Button to the Header */}
         <div className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-6 flex justify-between items-center">
-          <div className="flex items-center gap-3"><BookOpen size={28} /><h2 className="text-2xl font-bold">{test.title} - Section {currentSection + 1}</h2></div>
+          <div className="flex items-center gap-3">
+            {onCancel && (
+              <button onClick={onCancel} title="Back to Dashboard" className="mr-2 hover:bg-white/20 p-2 rounded-full transition-colors flex items-center justify-center">
+                <ArrowLeft size={24} />
+              </button>
+            )}
+            <BookOpen size={28} />
+            <h2 className="text-2xl font-bold">{test.title} - Section {currentSection + 1}</h2>
+          </div>
           <Timer initialSeconds={3600} onTimeUp={submitTest} />
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 h-[calc(100vh-250px)]">
-          {/* Passage Section */}
           <div className="p-8 border-r border-slate-200 overflow-y-auto">
             <h3 className="text-2xl font-bold mb-6 text-slate-800">{section.title}</h3>
             <div className="prose prose-lg text-slate-700" dangerouslySetInnerHTML={{ __html: section.passage }} />
           </div>
 
-          {/* Questions Section */}
           <div className="p-8 bg-slate-50 overflow-y-auto">
             <div className="space-y-8">
-              {/* Ensure unique keys by combining question ID and index */}
               {section.questions.map((q: any, idx: number) => (
                 <div key={q._id || idx} className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
                   <p className="font-medium text-slate-800 mb-4">

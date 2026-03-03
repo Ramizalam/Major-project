@@ -1,13 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 
-// Core Application Screens
 import LandingPage from './components/LandingPage';
 import SelectionScreen from './components/SelectionScreen';
 import AuthScreen from './components/AuthScreen';
 import PreparationScreen from './components/PreparationScreen';
 
-// Test Modules
 import WelcomeScreen from './components/WelcomeScreen';
 import ListeningModule from './components/ListeningModule';
 import ReadingModule from './components/ReadingModule';
@@ -15,14 +13,10 @@ import WritingModule from './components/WritingModule';
 import SpeakingModule from './components/SpeakingModule';
 import ResultsScreen from './components/ResultsScreen';
 
-// Admin & Auth
 import { AuthProvider, useAuth } from './context/AuthContext';
 import AdminLogin from './components/AdminLogin';
 import AdminDashboard from './components/AdminDashboard';
 
-// ==========================================
-// INTERFACES 
-// ==========================================
 export interface WritingFeedback {
   taskAchievement?: { score: number; feedback: string };
   coherenceAndCohesion?: { score: number; feedback: string };
@@ -72,9 +66,6 @@ export interface TestResults {
   };
 }
 
-// ==========================================
-// PROTECTED ROUTE WRAPPER
-// ==========================================
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { user, loading } = useAuth();
   
@@ -93,18 +84,25 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   return <>{children}</>;
 };
 
-// ==========================================
-// PRACTICE AREA COMPONENT
-// ==========================================
 function PracticeArea() {
   const [currentModule, setCurrentModule] = useState<'welcome' | 'listening' | 'reading' | 'writing' | 'speaking' | 'results' | 'admin'>('welcome');
   const [testResults, setTestResults] = useState<Partial<TestResults>>({});
   const [testMode, setTestMode] = useState<'full' | 'single'>('full');
-  
-  // NEW: State to track which specific test was clicked
   const [currentTestId, setCurrentTestId] = useState<string | undefined>(undefined);
 
   const { isAdmin } = useAuth();
+
+  // FIX: Intercept the Browser Back Button so it stays on Dashboard
+  useEffect(() => {
+    const handlePopState = () => {
+      if (currentModule !== 'welcome') {
+        setCurrentModule('welcome');
+        setCurrentTestId(undefined);
+      }
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [currentModule]);
 
   const handleModuleComplete = (module: keyof TestResults, results: any) => {
     setTestResults(prev => ({ ...prev, [module]: results }));
@@ -125,6 +123,9 @@ function PracticeArea() {
   };
 
   const startTest = (module?: 'listening' | 'reading' | 'writing' | 'speaking', testId?: string) => {
+    // FIX: Push a state to history so the back button has something to pop
+    window.history.pushState({ inTest: true }, '');
+    
     setCurrentTestId(testId);
     if (module) {
       setTestMode('single');
@@ -149,11 +150,11 @@ function PracticeArea() {
       )}
 
       {currentModule === 'listening' && (
-        <ListeningModule testId={currentTestId} onComplete={(results) => handleModuleComplete('listening', results)} />
+        <ListeningModule testId={currentTestId} onComplete={(results) => handleModuleComplete('listening', results)} onCancel={resetTest} />
       )}
 
       {currentModule === 'reading' && (
-        <ReadingModule testId={currentTestId} onComplete={(results) => handleModuleComplete('reading', results)} />
+        <ReadingModule testId={currentTestId} onComplete={(results) => handleModuleComplete('reading', results)} onCancel={resetTest} />
       )}
 
       {currentModule === 'writing' && (
@@ -182,9 +183,6 @@ function PracticeArea() {
   );
 }
 
-// ==========================================
-// MAIN APP ROUTING
-// ==========================================
 const App = () => {
   return (
     <AuthProvider>

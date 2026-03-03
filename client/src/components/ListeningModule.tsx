@@ -1,43 +1,43 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
-import { Headphones, AlertCircle, Play, Pause, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Headphones, AlertCircle, Play, Pause, ChevronRight, ArrowLeft, Loader } from 'lucide-react';
 import axios from 'axios';
+import Timer from './Timer';
 
 interface ListeningModuleProps {
   testId?: string;
   onComplete: (results: { score: number; answers: (string | number)[]; timeSpent: number }) => void;
+  onCancel?: () => void;
 }
 
-const ListeningModule: React.FC<ListeningModuleProps> = ({ testId, onComplete }) => {
+const ListeningModule: React.FC<ListeningModuleProps> = ({ testId, onComplete, onCancel }) => {
   const [test, setTest] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [currentSection, setCurrentSection] = useState(0);
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [isPlaying, setIsPlaying] = useState(false);
   const audioRef = useRef<HTMLAudioElement>(null);
 
   useEffect(() => {
+    let isMounted = true;
     const fetchTest = async () => {
       try {
         setLoading(true);
-        const url = testId 
-          ? `http://localhost:5000/api/listening/${testId}` 
-          : 'http://localhost:5000/api/listening';
-          
+        // Safely fetch the specific test based on testId
+        const url = testId ? `http://localhost:5000/api/listening/${testId}` : 'http://localhost:5000/api/listening';
         const res = await axios.get(url);
         const testData = Array.isArray(res.data) ? res.data[0] : res.data;
         
         if (!testData) throw new Error('No listening test found');
-        setTest(testData);
+        if (isMounted) setTest(testData);
       } catch (err: any) {
-        console.error('Error fetching test:', err);
-        setError(err.message || 'Failed to load listening test');
+        if (isMounted) setError(err.message || 'Failed to load listening test');
       } finally {
-        setLoading(false);
+        if (isMounted) setLoading(false);
       }
     };
     fetchTest();
+    return () => { isMounted = false; };
   }, [testId]);
 
   const togglePlay = () => {
@@ -53,6 +53,7 @@ const ListeningModule: React.FC<ListeningModuleProps> = ({ testId, onComplete })
     let score = 0;
     const finalAnswers: string[] = [];
 
+    // Check answers against the database
     test.sections.forEach((section: any) => {
       section.questions.forEach((q: any) => {
         const userAnswer = (answers[q._id] || '').trim().toLowerCase();
@@ -64,66 +65,101 @@ const ListeningModule: React.FC<ListeningModuleProps> = ({ testId, onComplete })
     onComplete({ score, answers: finalAnswers, timeSpent: 1800 });
   };
 
-  if (loading) return <div className="flex justify-center py-20 text-indigo-600"><div className="w-16 h-16 border-4 border-t-transparent rounded-full animate-spin"></div></div>;
+  if (loading) return <div className="flex justify-center py-20"><Loader className="animate-spin text-indigo-600" size={40} /></div>;
   if (error || !test) return <div className="text-center text-red-600 py-20"><AlertCircle size={48} className="mx-auto mb-4" /><p>{error}</p></div>;
 
-  const section = test.sections[currentSection];
+  const section = test.sections[0];
+  // Ensure audio URL points to the backend server
+  const audioUrl = section.audioUrl.startsWith('http') ? section.audioUrl : `http://localhost:5000${section.audioUrl}`;
 
   return (
-    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="max-w-4xl mx-auto p-6">
-      <div className="bg-white rounded-2xl shadow-xl overflow-hidden border border-slate-100">
+    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="max-w-5xl mx-auto p-6">
+      <div className="bg-white rounded-3xl shadow-2xl overflow-hidden border border-slate-100">
         
-        <div className="bg-gradient-to-r from-purple-600 to-indigo-600 text-white p-6 flex justify-between items-center">
-          <div className="flex items-center gap-3"><Headphones size={28} /><h2 className="text-2xl font-bold">{test.title} - Section {currentSection + 1}</h2></div>
+        <div className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-6 flex justify-between items-center">
+          <div className="flex items-center gap-3">
+             {onCancel && (
+              <button onClick={onCancel} title="Back to Dashboard" className="mr-2 hover:bg-white/20 p-2 rounded-full transition-colors flex items-center justify-center">
+                <ArrowLeft size={24} />
+              </button>
+            )}
+            <Headphones size={28} />
+            <h2 className="text-2xl font-bold">{test.title}</h2>
+          </div>
+          <Timer initialSeconds={1800} onTimeUp={submitTest} />
         </div>
 
-        <div className="p-8 bg-slate-50 border-b border-slate-200">
-          <div className="flex items-center justify-between bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-            <div>
-              <h3 className="text-lg font-bold text-slate-800">Section {currentSection + 1} Audio</h3>
-              <p className="text-slate-500 text-sm">You will hear the recording only once.</p>
-            </div>
-            <button onClick={togglePlay} className="flex items-center justify-center w-16 h-16 bg-purple-600 text-white rounded-full hover:bg-purple-700 transition shadow-lg">
+        <div className="p-8 bg-slate-50 border-b border-slate-200 flex flex-col md:flex-row items-center justify-between gap-6">
+          <div>
+            <h3 className="text-xl font-bold text-slate-800 mb-2">Test Audio</h3>
+            <p className="text-slate-500">Listen carefully. You will hear the recording only once.</p>
+          </div>
+          
+          <div className="flex items-center gap-4 bg-white px-6 py-4 rounded-full shadow-md border border-slate-200">
+            <button onClick={togglePlay} className="flex items-center justify-center w-14 h-14 bg-indigo-600 text-white rounded-full hover:bg-indigo-700 transition shadow-lg hover:scale-105">
               {isPlaying ? <Pause size={24} /> : <Play size={24} className="ml-1" />}
             </button>
+            <div className="text-slate-600 font-medium w-32 text-center">
+              {isPlaying ? "Playing..." : "Paused"}
+            </div>
+            {/* Hidden Audio Element */}
             <audio 
               ref={audioRef} 
-              src={section.audioUrl.startsWith('http') ? section.audioUrl : `http://localhost:5000${section.audioUrl}`} 
+              src={audioUrl} 
               onEnded={() => setIsPlaying(false)} 
               className="hidden" 
             />
           </div>
         </div>
 
-        <div className="p-8 space-y-6 bg-white h-[50vh] overflow-y-auto">
-          {section.questions.map((q: any) => (
-            <div key={q._id} className="p-6 bg-slate-50 rounded-xl border border-slate-200">
-              <p className="font-medium text-slate-800 mb-4"><span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-purple-100 text-purple-700 font-bold mr-3">{q.number || '?'}</span>{q.text}</p>
-              {q.type === 'multiple_choice' ? (
-                <div className="space-y-3 ml-11">
-                  {q.options?.map((opt: string, i: number) => (
-                    <label key={i} className="flex items-start gap-3 cursor-pointer">
-                      <input type="radio" name={q._id} value={opt} checked={answers[q._id] === opt} onChange={(e) => setAnswers({...answers, [q._id]: e.target.value})} className="mt-1 text-purple-600" />
-                      <span>{opt}</span>
-                    </label>
-                  ))}
-                </div>
-              ) : (
-                <div className="ml-11">
-                  <input type="text" value={answers[q._id] || ''} onChange={(e) => setAnswers({...answers, [q._id]: e.target.value})} placeholder="Type answer..." className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500" />
-                </div>
-              )}
-            </div>
-          ))}
+        <div className="p-8 bg-white h-[55vh] overflow-y-auto">
+          <h3 className="text-lg font-bold mb-6 text-slate-800 border-b pb-2">Questions 1 - 15</h3>
+          <div className="space-y-8">
+            {section.questions.map((q: any, idx: number) => (
+              <div key={q._id || idx} className="p-6 bg-slate-50 rounded-2xl border border-slate-200 shadow-sm hover:border-indigo-300 transition-colors">
+                <p className="font-semibold text-slate-800 mb-5 text-lg">
+                  <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-indigo-100 text-indigo-700 font-bold mr-3 text-sm">
+                    {q.number}
+                  </span>
+                  {q.text}
+                </p>
+                
+                {q.type === 'multiple_choice' ? (
+                  <div className="space-y-3 ml-11">
+                    {q.options?.map((opt: string, i: number) => (
+                      <label key={i} className="flex items-center gap-3 cursor-pointer group bg-white p-3 rounded-xl border border-slate-200 hover:bg-indigo-50 transition-colors">
+                        <input 
+                          type="radio" 
+                          name={`q_${idx}`} 
+                          value={opt} 
+                          checked={answers[q._id] === opt} 
+                          onChange={(e) => setAnswers({...answers, [q._id]: e.target.value})} 
+                          className="w-5 h-5 text-indigo-600 focus:ring-indigo-500" 
+                        />
+                        <span className="text-slate-700 group-hover:text-indigo-900 font-medium">{opt}</span>
+                      </label>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="ml-11">
+                    <input 
+                      type="text" 
+                      value={answers[q._id] || ''} 
+                      onChange={(e) => setAnswers({...answers, [q._id]: e.target.value})} 
+                      placeholder="Type your exact answer..." 
+                      className="w-full md:w-1/2 px-4 py-3 border-2 border-slate-200 rounded-xl focus:ring-4 focus:ring-indigo-100 focus:border-indigo-500 transition-all font-medium text-slate-700" 
+                    />
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
         </div>
 
-        <div className="bg-slate-50 border-t border-slate-200 p-6 flex justify-between">
-          <button onClick={() => {setCurrentSection(c => Math.max(0, c - 1)); setIsPlaying(false);}} disabled={currentSection === 0} className={`flex items-center gap-2 px-6 py-3 rounded-xl font-medium ${currentSection === 0 ? 'bg-slate-200 text-slate-400' : 'bg-white text-purple-600 border border-purple-600 hover:bg-purple-50'}`}><ChevronLeft size={20} /> Previous</button>
-          {currentSection === test.sections.length - 1 ? (
-            <button onClick={submitTest} className="px-8 py-3 bg-green-600 hover:bg-green-700 text-white rounded-xl font-bold shadow-lg">Submit Test</button>
-          ) : (
-            <button onClick={() => {setCurrentSection(c => Math.min(test.sections.length - 1, c + 1)); setIsPlaying(false);}} className="flex items-center gap-2 px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-xl font-medium shadow-lg">Next <ChevronRight size={20} /></button>
-          )}
+        <div className="bg-slate-50 border-t border-slate-200 p-6 flex justify-end">
+           <button onClick={submitTest} className="px-10 py-4 bg-green-600 hover:bg-green-700 text-white rounded-xl font-bold shadow-[0_0_20px_rgba(22,163,74,0.4)] transition-transform hover:scale-105 text-lg flex items-center gap-2">
+             Submit Test <ChevronRight size={24} />
+           </button>
         </div>
       </div>
     </motion.div>
