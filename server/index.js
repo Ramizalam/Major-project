@@ -3,7 +3,7 @@ const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const path = require('path');
-
+const adminRoutes = require('./routes/admin');
 const app = express();
 
 // Middleware
@@ -32,6 +32,7 @@ app.use('/api/listening', listeningRoutes);
 app.use('/api/reading', readingRoutes);
 app.use('/api/writing', writingRoutes);
 app.use('/api/speaking', speakingRoutes);
+app.use('/api/admin', adminRoutes);
 
 // MongoDB Connection
 mongoose.connect(process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/ielts_prep')

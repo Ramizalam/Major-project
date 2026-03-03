@@ -21,7 +21,8 @@ const generateToken = (id) => {
 
 router.post('/register', async (req, res) => {
     try {
-        const { name, email, mobileNumber, password } = req.body;
+        let { name, email, mobileNumber, password } = req.body;
+        email = email.trim().toLowerCase(); // PREVENTS CASE-SENSITIVITY BUGS
 
         const userExists = await User.findOne({ $or: [{ email }, { mobileNumber }] });
         if (userExists) {
@@ -52,7 +53,7 @@ router.post('/register', async (req, res) => {
             res.status(201).json({ message: 'OTP sent to your email.', email: user.email });
         } catch (mailError) {
             console.error("Mail Sending Failed:", mailError);
-            res.status(500).json({ message: 'Failed to send email. Check EMAIL_USER and EMAIL_PASS in backend .env file.' });
+            res.status(500).json({ message: 'Failed to send email. Check EMAIL_USER and EMAIL_PASS.' });
         }
     } catch (error) {
         console.error(error);
@@ -62,11 +63,16 @@ router.post('/register', async (req, res) => {
 
 router.post('/verify-otp', async (req, res) => {
     try {
-        const { email, otp } = req.body;
+        let { email, otp } = req.body;
+        email = email.trim().toLowerCase(); 
+        const cleanOtp = String(otp).trim(); // PREVENTS INVISIBLE SPACE BUGS
+
         const user = await User.findOne({ email });
 
         if (!user) return res.status(400).json({ message: 'User not found' });
-        if (user.otp !== otp) return res.status(400).json({ message: 'Invalid OTP' });
+        
+        // COMPARES CLEANED OTP
+        if (user.otp !== cleanOtp) return res.status(400).json({ message: 'Invalid OTP' });
         if (user.otpExpiry < Date.now()) return res.status(400).json({ message: 'OTP has expired' });
 
         user.isVerified = true; user.otp = undefined; user.otpExpiry = undefined;
@@ -80,7 +86,9 @@ router.post('/verify-otp', async (req, res) => {
 
 router.post('/login', async (req, res) => {
     try {
-        const { email, password } = req.body;
+        let { email, password } = req.body;
+        email = email.trim().toLowerCase();
+        
         const user = await User.findOne({ email });
 
         if (!user) return res.status(401).json({ message: 'Invalid email or password' });
@@ -96,5 +104,60 @@ router.post('/login', async (req, res) => {
     }
 });
 
-// ... Keep your existing forgot-password and reset-password routes below ...
+router.post('/forgot-password', async (req, res) => {
+    try {
+        let { email } = req.body;
+        email = email.trim().toLowerCase();
+        
+        const user = await User.findOne({ email });
+        if (!user) return res.status(404).json({ message: 'User with this email does not exist' });
+
+        const otp = Math.floor(100000 + Math.random() * 900000).toString();
+        user.otp = otp;
+        user.otpExpiry = new Date(Date.now() + 10 * 60000);
+        await user.save();
+
+        console.log(`\n🚨 PASSWORD RESET OTP FOR ${email} IS: ${otp} 🚨\n`);
+
+        try {
+            await transporter.sendMail({
+                from: process.env.EMAIL_USER,
+                to: email,
+                subject: 'PASSWORD RESET OTP',
+                html: `<h2>Password Reset Request</h2><p>Your OTP to reset your password is: <strong style="font-size: 24px;">${otp}</strong></p>`
+            });
+            res.json({ message: 'Password reset OTP sent to your email' });
+        } catch (err) {
+            console.error("Mail error:", err);
+            res.status(500).json({ message: 'Failed to send OTP email.' });
+        }
+    } catch (error) {
+        res.status(500).json({ message: 'Server error' });
+    }
+});
+
+router.post('/reset-password', async (req, res) => {
+    try {
+        let { email, otp, newPassword } = req.body;
+        email = email.trim().toLowerCase();
+        const cleanOtp = String(otp).trim();
+        
+        const user = await User.findOne({ email });
+
+        if (!user) return res.status(400).json({ message: 'User not found' });
+        if (user.otp !== cleanOtp) return res.status(400).json({ message: 'Invalid OTP' });
+        if (user.otpExpiry < Date.now()) return res.status(400).json({ message: 'OTP has expired' });
+
+        const salt = await bcrypt.genSalt(10);
+        user.password = await bcrypt.hash(newPassword, salt);
+        user.otp = undefined;
+        user.otpExpiry = undefined;
+        await user.save();
+
+        res.json({ message: 'Password has been reset successfully. You can now login.' });
+    } catch (error) {
+        res.status(500).json({ message: 'Server error' });
+    }
+});
+
 module.exports = router;
