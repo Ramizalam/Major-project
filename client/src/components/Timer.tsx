@@ -1,68 +1,48 @@
 import React, { useState, useEffect } from 'react';
-import { Clock, AlertTriangle } from 'lucide-react';
+import { Clock } from 'lucide-react';
 
 interface TimerProps {
-  duration: number; // in seconds
+  initialSeconds: number;
   onTimeUp: () => void;
-  showWarning?: boolean;
 }
 
-const Timer: React.FC<TimerProps> = ({ duration, onTimeUp, showWarning = true }) => {
-  const [timeLeft, setTimeLeft] = useState(duration);
-  const [isWarning, setIsWarning] = useState(false);
+const Timer: React.FC<TimerProps> = ({ initialSeconds, onTimeUp }) => {
+  const [timeLeft, setTimeLeft] = useState(initialSeconds);
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      setTimeLeft((prev) => {
-        if (prev <= 1) {
-          onTimeUp();
-          return 0;
-        }
-        
-        // Show warning when 5 minutes left
-        if (prev <= 300 && showWarning && !isWarning) {
-          setIsWarning(true);
-        }
-        
-        return prev - 1;
-      });
+    // Stop and trigger submission when time hits 0
+    if (timeLeft <= 0) {
+      onTimeUp();
+      return;
+    }
+
+    // Tick down every second
+    const timerId = setInterval(() => {
+      setTimeLeft((prev) => prev - 1);
     }, 1000);
 
-    return () => clearInterval(interval);
-  }, [onTimeUp, showWarning, isWarning]);
+    // Cleanup interval on unmount
+    return () => clearInterval(timerId);
+  }, [timeLeft, onTimeUp]);
 
+  // Format MM:SS
   const formatTime = (seconds: number) => {
-    const hours = Math.floor(seconds / 3600);
-    const minutes = Math.floor((seconds % 3600) / 60);
-    const remainingSeconds = seconds % 60;
-    
-    if (hours > 0) {
-      return `${hours}:${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
-    }
-    return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
   };
 
-  const getProgressPercentage = () => {
-    return ((duration - timeLeft) / duration) * 100;
-  };
+  // Turn red when less than 5 minutes remain
+  const isUrgent = timeLeft < 300;
 
   return (
-    <div className={`flex items-center space-x-3 ${isWarning ? 'text-red-600' : 'text-gray-700'}`}>
-      {isWarning && <AlertTriangle className="w-5 h-5 animate-pulse" />}
-      <Clock className="w-5 h-5" />
-      <div className="text-right">
-        <div className={`text-lg font-bold ${isWarning ? 'text-red-600' : 'text-gray-800'}`}>
-          {formatTime(timeLeft)}
-        </div>
-        <div className="w-24 bg-gray-200 rounded-full h-1.5 mt-1">
-          <div
-            className={`h-1.5 rounded-full transition-all duration-300 ${
-              isWarning ? 'bg-red-500' : 'bg-blue-500'
-            }`}
-            style={{ width: `${getProgressPercentage()}%` }}
-          ></div>
-        </div>
-      </div>
+    <div className={`flex items-center gap-2 px-5 py-2 rounded-xl font-mono text-xl font-bold border shadow-inner ${
+      isUrgent 
+        ? 'bg-red-100 text-red-600 border-red-300 animate-pulse' 
+        : 'bg-slate-800/30 text-white border-white/20'
+    }`}>
+      <Clock size={22} className={isUrgent ? 'text-red-500' : 'text-cyan-400'} />
+      {formatTime(timeLeft)}
     </div>
   );
 };

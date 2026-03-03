@@ -1,83 +1,73 @@
-
 const express = require('express');
+const mongoose = require('mongoose');
 const ReadingTest = require('../models/ReadingTest');
 const { generateReadingFeedback } = require('../services/feedbackService');
 
 const router = express.Router();
 
-// GET /api/reading
+// GET /api/reading - Get ALL tests
 router.get('/', async (req, res) => {
   try {
-    const doc = await ReadingTest.findOne();
+    const docs = await ReadingTest.find();
+    res.json(docs);
+  } catch (err) {
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// GET /api/reading/:id - Get SPECIFIC test safely
+router.get('/:id', async (req, res) => {
+  try {
+    const id = req.params.id;
+    let doc;
+    
+    if (id && id.startsWith('full_')) {
+      const index = parseInt(id.split('_')[1]) - 1;
+      const docs = await ReadingTest.find();
+      doc = docs[index] || docs[0];
+    } else if (mongoose.Types.ObjectId.isValid(id)) {
+      doc = await ReadingTest.findById(id);
+    } else {
+      return res.status(400).json({ message: 'Invalid test ID format' });
+    }
+
     if (!doc) return res.status(404).json({ message: 'Reading test not found' });
     res.json(doc);
   } catch (err) {
-    console.error(err);
+    console.error("Reading fetch error:", err);
     res.status(500).json({ message: 'Server error' });
   }
 });
 
-// POST /api/reading/submit - Submit answers and get feedback
+// POST /api/reading/submit
 router.post('/submit', async (req, res) => {
   try {
-    const { userAnswers } = req.body;
-
-    if (!userAnswers || !Array.isArray(userAnswers)) {
-      return res.status(400).json({ message: 'Invalid answers format' });
+    const { testId, userAnswers } = req.body;
+    let test;
+    
+    if (testId && testId.startsWith('full_')) {
+        const index = parseInt(testId.split('_')[1]) - 1;
+        const docs = await ReadingTest.find();
+        test = docs[index] || docs[0];
+    } else if (mongoose.Types.ObjectId.isValid(testId || req.body._id)) {
+        test = await ReadingTest.findById(testId || req.body._id);
     }
+    
+    if (!test) return res.status(404).json({ message: 'Test not found' });
 
-    // Get correct answers from the test
-    const test = await ReadingTest.findOne();
-    if (!test) {
-      return res.status(404).json({ message: 'Reading test not found' });
-    }
-
-    // Calculate correct answers
     let correctCount = 0;
     const detailedResults = userAnswers.map((userAnswer, index) => {
-      const correctAnswer = test.questions[index]?.correctAnswer;
-      const isCorrect = userAnswer.toString().toLowerCase().trim() ===
-        correctAnswer.toString().toLowerCase().trim();
+      const allQuestions = test.sections.flatMap(s => s.questions);
+      const correctAnswer = allQuestions[index]?.correctAnswer || '';
+      const isCorrect = userAnswer.toString().toLowerCase().trim() === correctAnswer.toString().toLowerCase().trim();
       if (isCorrect) correctCount++;
-
-      return {
-        questionNumber: index + 1,
-        userAnswer,
-        correctAnswer,
-        isCorrect
-      };
+      return { questionNumber: index + 1, userAnswer, correctAnswer, isCorrect };
     });
 
-    // Generate comprehensive feedback
     const feedback = generateReadingFeedback(correctCount, userAnswers.length);
-
-    res.json({
-      success: true,
-      submission: {
-        totalQuestions: userAnswers.length,
-        correctAnswers: correctCount,
-        detailedResults
-      },
-      feedback
-    });
+    res.json({ success: true, submission: { totalQuestions: userAnswers.length, correctAnswers: correctCount, detailedResults }, feedback });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: 'Server error' });
-  }
-});
-
-const { protect, admin } = require('../middleware/auth');
-
-// POST /api/reading - Create or update reading test (Admin only)
-router.post('/', protect, admin, async (req, res) => {
-  try {
-    // There should only be one reading test in this simple setup
-    await ReadingTest.deleteMany({});
-
-    const newTest = await ReadingTest.create(req.body);
-    res.status(201).json(newTest);
-  } catch (err) {
-    console.error(err);
+    console.error("Reading submit error:", err);
     res.status(500).json({ message: 'Server error' });
   }
 });

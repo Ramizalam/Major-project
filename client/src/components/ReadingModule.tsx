@@ -1,240 +1,128 @@
 import React, { useState, useEffect } from 'react';
-import { BookOpen } from 'lucide-react';
+import { motion } from 'framer-motion';
+import { BookOpen, AlertCircle, ChevronLeft, ChevronRight } from 'lucide-react';
 import Timer from './Timer';
+import axios from 'axios';
 
 interface ReadingModuleProps {
+  testId?: string;
   onComplete: (results: { score: number; answers: (string | number)[]; timeSpent: number }) => void;
 }
 
-const ReadingModule: React.FC<ReadingModuleProps> = ({ onComplete }) => {
-  const [currentPassage, setCurrentPassage] = useState(1);
-  const [answers, setAnswers] = useState<(string | number)[]>(Array(40).fill(''));
-  const [timeSpent, setTimeSpent] = useState(0);
-  const [readingTest, setReadingTest] = useState<any>(null);
+const ReadingModule: React.FC<ReadingModuleProps> = ({ testId, onComplete }) => {
+  const [test, setTest] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState('');
+  const [currentSection, setCurrentSection] = useState(0);
+  const [answers, setAnswers] = useState<Record<string, string>>({});
 
   useEffect(() => {
+    let isMounted = true; // Prevent duplicate state updates
+
     const fetchTest = async () => {
       try {
-        const baseUrl = import.meta.env?.VITE_API_URL || 'http://localhost:5000';
-        const response = await fetch(`${baseUrl}/api/reading`);
-        if (!response.ok) throw new Error('Failed to load reading test');
-        const data = await response.json();
-        setReadingTest(data);
+        setLoading(true);
+        const url = testId 
+          ? `http://localhost:5000/api/reading/${testId}` 
+          : 'http://localhost:5000/api/reading';
+          
+        const res = await axios.get(url);
+        const testData = Array.isArray(res.data) ? res.data[0] : res.data;
+        
+        if (!testData) throw new Error('No reading test found');
+        
+        if (isMounted) setTest(testData);
       } catch (err: any) {
-        console.error('Error fetching reading test:', err);
-        setError(err.message || 'Failed to load reading test');
+        if (isMounted) setError(err.message || 'Failed to load reading test');
       } finally {
-        setLoading(false);
+        if (isMounted) setLoading(false);
       }
     };
     fetchTest();
-  }, []);
 
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setTimeSpent(prev => prev + 1);
-    }, 1000);
-    return () => clearInterval(interval);
-  }, []);
+    return () => { isMounted = false; };
+  }, [testId]);
 
-  const handleAnswerChange = (questionIndex: number, value: string | number) => {
-    const newAnswers = [...answers];
-    newAnswers[questionIndex] = value;
-    setAnswers(newAnswers);
+  const handleAnswerChange = (questionId: string, value: string) => {
+    setAnswers(prev => ({ ...prev, [questionId]: value }));
   };
 
-  const calculateScore = () => {
-    if (!readingTest || !readingTest.correctAnswers) return 0;
-    let correct = 0;
-    answers.forEach((answer, index) => {
-      const userAnswer = typeof answer === 'string' ? answer.toString().toLowerCase().trim() : answer.toString();
-      const correctAnswerItem = readingTest.correctAnswers[index];
-      const correctAnswer = correctAnswerItem ? correctAnswerItem.toString().toLowerCase() : '';
-      if (userAnswer === correctAnswer && correctAnswer !== '') {
-        correct++;
-      }
+  const submitTest = () => {
+    if (!test) return;
+    let score = 0;
+    const finalAnswers: string[] = [];
+
+    test.sections.forEach((section: any) => {
+      section.questions.forEach((q: any) => {
+        const userAnswer = (answers[q._id] || '').trim().toLowerCase();
+        finalAnswers.push(userAnswer);
+        if (userAnswer === q.correctAnswer.trim().toLowerCase()) score++;
+      });
     });
-    return correct;
+
+    onComplete({ score, answers: finalAnswers, timeSpent: 3600 });
   };
 
-  const convertToIELTSBand = (rawScore: number) => {
-    const bandTable = {
-      39: 9.0, 37: 8.5, 35: 8.0, 32: 7.5, 30: 7.0,
-      26: 6.5, 23: 6.0, 18: 5.5, 16: 5.0, 13: 4.5,
-      10: 4.0, 8: 3.5, 6: 3.0, 4: 2.5, 3: 2.0
-    };
+  if (loading) return <div className="flex justify-center py-20"><div className="w-16 h-16 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div></div>;
+  if (error || !test) return <div className="text-center text-red-600 py-20"><AlertCircle size={48} className="mx-auto mb-4" /><p>{error}</p></div>;
 
-    for (const [score, band] of Object.entries(bandTable)) {
-      if (rawScore >= parseInt(score)) {
-        return band;
-      }
-    }
-    return 1.0;
-  };
-
-  const handleSubmit = () => {
-    const rawScore = calculateScore();
-    const bandScore = convertToIELTSBand(rawScore);
-    onComplete({ score: bandScore, answers, timeSpent });
-  };
-
-  const getQuestionStartIndex = (passageNum: number) => {
-    if (passageNum === 1) return 0;
-    if (passageNum === 2) return 10;
-    return 25;
-  };
-
-  const renderQuestions = (passageNum: number) => {
-    if (!readingTest || !readingTest.passages || readingTest.passages.length < passageNum) return null;
-    const startIndex = getQuestionStartIndex(passageNum);
-    const questionsCount = readingTest.passages[passageNum - 1].questions;
-    const endIndex = startIndex + questionsCount;
-    const questions = [];
-
-    for (let i = startIndex; i < endIndex; i++) {
-      const questionNum = i + 1;
-      questions.push(
-        <div key={i} className="mb-4 p-4 bg-gray-50 rounded-lg">
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            {questionNum}. {getQuestionText(i, passageNum)}
-          </label>
-          {getQuestionInput(i, questionNum, passageNum)}
-        </div>
-      );
-    }
-    return questions;
-  };
-
-  const getQuestionText = (index: number, passageNum: number) => {
-    if (!readingTest || !readingTest.questionTexts || !readingTest.questionTexts[passageNum]) {
-      return `Question ${index + 1}`;
-    }
-    const passageQuestions = readingTest.questionTexts[passageNum];
-    const questionIndex = index - getQuestionStartIndex(passageNum);
-    return passageQuestions[questionIndex] || `Question ${index + 1}`;
-  };
-
-  const getQuestionInput = (index: number, questionNum: number, passageNum: number) => {
-    const questionIndex = index - getQuestionStartIndex(passageNum);
-
-    let options = null;
-    if (readingTest && readingTest.questionOptions && readingTest.questionOptions[passageNum]) {
-      const passageOptions = readingTest.questionOptions[passageNum];
-      if (passageOptions && passageOptions[questionIndex]) {
-        options = passageOptions[questionIndex];
-      }
-    }
-
-    const defaultOptions = ['A', 'B', 'C', 'D'];
-    const displayOptions = (options && Array.isArray(options) && options.length > 0) ? options : defaultOptions;
-
-    return (
-      <div className="space-y-2">
-        {displayOptions.map((option, optionIndex) => {
-          const letter = String.fromCharCode(65 + optionIndex);
-          const isDefault = displayOptions === defaultOptions;
-          return (
-            <label key={letter} className="flex items-center">
-              <input
-                type="radio"
-                name={`q${questionNum}`}
-                value={letter}
-                checked={answers[index] === letter}
-                onChange={(e) => handleAnswerChange(index, e.target.value)}
-                className="mr-2"
-              />
-              <span className="text-sm">{isDefault ? option : `${letter}) ${option}`}</span>
-            </label>
-          );
-        })}
-      </div>
-    );
-  };
-
-  if (loading) {
-    return <div className="min-h-screen bg-gray-50 py-8 flex items-center justify-center">Loading reading test...</div>;
-  }
-
-  if (error || !readingTest) {
-    return <div className="min-h-screen bg-gray-50 py-8 flex items-center justify-center text-red-600">{error || "Failed to load test"}</div>;
-  }
+  const section = test.sections[currentSection];
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8">
-      <div className="max-w-6xl mx-auto px-6">
-        {/* Header */}
-        <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-3">
-              <BookOpen className="w-8 h-8 text-blue-600" />
-              <div>
-                <h1 className="text-2xl font-bold text-gray-800">IELTS Reading Test</h1>
-                <p className="text-gray-600">40 questions • 60 minutes</p>
-              </div>
-            </div>
-            <Timer duration={60 * 60} onTimeUp={handleSubmit} />
-          </div>
+    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="max-w-6xl mx-auto p-6">
+      <div className="bg-white rounded-2xl shadow-xl overflow-hidden border border-slate-100">
+        <div className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-6 flex justify-between items-center">
+          <div className="flex items-center gap-3"><BookOpen size={28} /><h2 className="text-2xl font-bold">{test.title} - Section {currentSection + 1}</h2></div>
+          <Timer initialSeconds={3600} onTimeUp={submitTest} />
         </div>
 
-        <div className="grid lg:grid-cols-2 gap-6 items-start">
-          {/* Passage */}
-          <div className="bg-white rounded-lg shadow-md p-6">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-bold text-gray-800">
-                Passage {currentPassage}: {readingTest.passages[currentPassage - 1]?.title}
-              </h2>
-              <div className="flex space-x-2">
-                {readingTest.passages.map((_: any, idx: number) => {
-                  const num = idx + 1;
-                  return (
-                    <button
-                      key={num}
-                      onClick={() => setCurrentPassage(num)}
-                      className={`px-3 py-1 rounded-md text-sm font-medium ${currentPassage === num
-                        ? 'bg-blue-600 text-white'
-                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                        }`}
-                    >
-                      {num}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
+        <div className="grid grid-cols-1 lg:grid-cols-2 h-[calc(100vh-250px)]">
+          {/* Passage Section */}
+          <div className="p-8 border-r border-slate-200 overflow-y-auto">
+            <h3 className="text-2xl font-bold mb-6 text-slate-800">{section.title}</h3>
+            <div className="prose prose-lg text-slate-700" dangerouslySetInnerHTML={{ __html: section.passage }} />
+          </div>
 
-            <div className="prose max-w-none text-gray-700 leading-relaxed">
-              {readingTest.passages[currentPassage - 1]?.text?.split('\n\n').map((paragraph: string, index: number) => (
-                <p key={index} className="mb-4">
-                  {paragraph.trim()}
-                </p>
+          {/* Questions Section */}
+          <div className="p-8 bg-slate-50 overflow-y-auto">
+            <div className="space-y-8">
+              {/* Ensure unique keys by combining question ID and index */}
+              {section.questions.map((q: any, idx: number) => (
+                <div key={q._id || idx} className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                  <p className="font-medium text-slate-800 mb-4">
+                    <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-indigo-100 text-indigo-700 font-bold mr-3">{q.number}</span>
+                    {q.text}
+                  </p>
+                  {q.type === 'multiple_choice' || q.type === 'true_false_not_given' ? (
+                    <div className="space-y-3 ml-11">
+                      {q.options?.map((opt: string, i: number) => (
+                        <label key={i} className="flex items-start gap-3 cursor-pointer group">
+                          <input type="radio" name={q._id || `q${idx}`} value={opt} checked={answers[q._id] === opt} onChange={(e) => handleAnswerChange(q._id, e.target.value)} className="mt-1 text-indigo-600 focus:ring-indigo-500" />
+                          <span className="text-slate-700">{opt}</span>
+                        </label>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="ml-11">
+                      <input type="text" value={answers[q._id] || ''} onChange={(e) => handleAnswerChange(q._id, e.target.value)} placeholder="Type answer..." className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500" />
+                    </div>
+                  )}
+                </div>
               ))}
             </div>
           </div>
-
-          {/* Questions */}
-          <div className="bg-white rounded-lg shadow-md p-6">
-            <h3 className="text-lg font-semibold mb-6">
-              Questions for Passage {currentPassage}
-            </h3>
-            <div className="space-y-4 max-h-[927px] overflow-y-auto">
-              {renderQuestions(currentPassage)}
-            </div>
-          </div>
         </div>
 
-        {/* Submit Button */}
-        <div className="text-center mt-8">
-          <button
-            onClick={handleSubmit}
-            className="bg-green-600 hover:bg-green-700 text-white font-semibold py-3 px-8 rounded-lg transition-colors"
-          >
-            Complete Reading Test
-          </button>
+        <div className="bg-slate-50 border-t border-slate-200 p-6 flex justify-between items-center">
+          <button onClick={() => setCurrentSection(Math.max(0, currentSection - 1))} disabled={currentSection === 0} className={`flex items-center gap-2 px-6 py-3 rounded-xl font-medium ${currentSection === 0 ? 'bg-slate-200 text-slate-400' : 'bg-white text-indigo-600 border border-indigo-600'}`}><ChevronLeft size={20} /> Previous</button>
+          {currentSection === test.sections.length - 1 ? (
+            <button onClick={submitTest} className="px-8 py-3 bg-green-600 hover:bg-green-700 text-white rounded-xl font-bold shadow-lg">Submit Test</button>
+          ) : (
+            <button onClick={() => setCurrentSection(Math.min(test.sections.length - 1, currentSection + 1))} className="flex items-center gap-2 px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-medium shadow-lg">Next <ChevronRight size={20} /></button>
+          )}
         </div>
       </div>
-    </div>
+    </motion.div>
   );
 };
 

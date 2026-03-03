@@ -5,7 +5,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import LandingPage from './components/LandingPage';
 import SelectionScreen from './components/SelectionScreen';
 import AuthScreen from './components/AuthScreen';
-import PreparationScreen from './components/PreparationScreen'; // <-- New Import
+import PreparationScreen from './components/PreparationScreen';
 
 // Test Modules
 import WelcomeScreen from './components/WelcomeScreen';
@@ -71,6 +71,7 @@ export interface TestResults {
     evaluation?: SpeakingEvaluation;
   };
 }
+
 // ==========================================
 // PROTECTED ROUTE WRAPPER
 // ==========================================
@@ -99,6 +100,9 @@ function PracticeArea() {
   const [currentModule, setCurrentModule] = useState<'welcome' | 'listening' | 'reading' | 'writing' | 'speaking' | 'results' | 'admin'>('welcome');
   const [testResults, setTestResults] = useState<Partial<TestResults>>({});
   const [testMode, setTestMode] = useState<'full' | 'single'>('full');
+  
+  // NEW: State to track which specific test was clicked
+  const [currentTestId, setCurrentTestId] = useState<string | undefined>(undefined);
 
   const { isAdmin } = useAuth();
 
@@ -120,7 +124,8 @@ function PracticeArea() {
     }
   };
 
-  const startTest = (module?: 'listening' | 'reading' | 'writing' | 'speaking') => {
+  const startTest = (module?: 'listening' | 'reading' | 'writing' | 'speaking', testId?: string) => {
+    setCurrentTestId(testId);
     if (module) {
       setTestMode('single');
       setCurrentModule(module);
@@ -134,6 +139,7 @@ function PracticeArea() {
     setCurrentModule('welcome');
     setTestResults({});
     setTestMode('full');
+    setCurrentTestId(undefined);
   };
 
   return (
@@ -143,19 +149,19 @@ function PracticeArea() {
       )}
 
       {currentModule === 'listening' && (
-        <ListeningModule onComplete={(results) => handleModuleComplete('listening', results)} />
+        <ListeningModule testId={currentTestId} onComplete={(results) => handleModuleComplete('listening', results)} />
       )}
 
       {currentModule === 'reading' && (
-        <ReadingModule onComplete={(results) => handleModuleComplete('reading', results)} />
+        <ReadingModule testId={currentTestId} onComplete={(results) => handleModuleComplete('reading', results)} />
       )}
 
       {currentModule === 'writing' && (
-        <WritingModule onComplete={(results) => handleModuleComplete('writing', results)} />
+        <WritingModule testId={currentTestId} onComplete={(results) => handleModuleComplete('writing', results)} />
       )}
 
       {currentModule === 'speaking' && (
-        <SpeakingModule onComplete={(results) => handleModuleComplete('speaking', results)} />
+        <SpeakingModule testId={currentTestId} onComplete={(results) => handleModuleComplete('speaking', results)} />
       )}
 
       {currentModule === 'results' && (
@@ -184,18 +190,15 @@ const App = () => {
     <AuthProvider>
       <Router>
         <Routes>
-          {/* Public Routes */}
           <Route path="/" element={<LandingPage />} />
           <Route path="/auth" element={<AuthScreen />} />
           
-          {/* Protected Routes */}
           <Route path="/selection" element={
             <ProtectedRoute>
               <SelectionScreen />
             </ProtectedRoute>
           } />
           
-          {/* The new Preparation Route! */}
           <Route path="/preparation" element={
             <ProtectedRoute>
               <PreparationScreen />
