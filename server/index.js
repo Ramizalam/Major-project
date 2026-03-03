@@ -2,48 +2,44 @@ require('dotenv').config();
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
-
-const readingRoutes = require('./routes/reading');
-const listeningRoutes = require('./routes/listening');
-const writingRoutes = require('./routes/writing');
-const speakingRoutes = require('./routes/speaking');
+const path = require('path');
 
 const app = express();
+
+// Middleware
 app.use(cors());
 app.use(express.json());
 
+// 🎵 THE CRUCIAL FIX: Expose the public folder so MP3s can stream!
+app.use('/public', express.static(path.join(__dirname, 'public')));
+
+app.get('/health', (req, res) => {
+    res.status(200).json({ status: 'OK', message: 'IELTS Prep Server is running' });
+});
+
+// Import Routes
 const authRoutes = require('./routes/auth');
-app.use('/api/auth', authRoutes);
-
-
-
-// --- ADD THESE TWO LINES ---
 const analyticsRoutes = require('./routes/analytics');
+const listeningRoutes = require('./routes/listening');
+const readingRoutes = require('./routes/reading');
+const writingRoutes = require('./routes/writing');
+const speakingRoutes = require('./routes/speaking');
+
+// Mount Routes
+app.use('/api/auth', authRoutes);
 app.use('/api/analytics', analyticsRoutes);
-// ---------------------------
-
-// Serve static files from public directory
-app.use('/public', express.static('public'));
-
-// Serve static files from public directory
-
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/ielts_prep';
-const PORT = process.env.PORT || 5000;
-
-mongoose
-  .connect(MONGODB_URI, { dbName: 'ielts_prep' })
-  .then(() => {
-    console.log('MongoDB connected');
-    app.listen(PORT, () => console.log(`Server running on http://localhost:${PORT}`));
-  })
-  .catch((err) => {
-    console.error('MongoDB connection error:', err);
-    process.exit(1);
-  });
-
-app.get('/api/health', (req, res) => res.json({ ok: true }));
-
-app.use('/api/reading', readingRoutes);
 app.use('/api/listening', listeningRoutes);
+app.use('/api/reading', readingRoutes);
 app.use('/api/writing', writingRoutes);
 app.use('/api/speaking', speakingRoutes);
+
+// MongoDB Connection
+mongoose.connect(process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/ielts_prep')
+  .then(() => console.log('✅ MongoDB connected successfully'))
+  .catch(err => console.error('❌ MongoDB connection error:', err));
+
+const PORT = process.env.PORT || 5000;
+
+app.listen(PORT, () => {
+  console.log(`🚀 Server running on http://localhost:${PORT}`);
+});

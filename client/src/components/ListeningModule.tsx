@@ -23,7 +23,6 @@ const ListeningModule: React.FC<ListeningModuleProps> = ({ testId, onComplete, o
     const fetchTest = async () => {
       try {
         setLoading(true);
-        // Safely fetch the specific test based on testId
         const url = testId ? `http://localhost:5000/api/listening/${testId}` : 'http://localhost:5000/api/listening';
         const res = await axios.get(url);
         const testData = Array.isArray(res.data) ? res.data[0] : res.data;
@@ -31,7 +30,7 @@ const ListeningModule: React.FC<ListeningModuleProps> = ({ testId, onComplete, o
         if (!testData) throw new Error('No listening test found');
         if (isMounted) setTest(testData);
       } catch (err: any) {
-        if (isMounted) setError(err.message || 'Failed to load listening test');
+        if (isMounted) setError(err.message || 'Failed to load test');
       } finally {
         if (isMounted) setLoading(false);
       }
@@ -53,12 +52,11 @@ const ListeningModule: React.FC<ListeningModuleProps> = ({ testId, onComplete, o
     let score = 0;
     const finalAnswers: string[] = [];
 
-    // Check answers against the database
     test.sections.forEach((section: any) => {
       section.questions.forEach((q: any) => {
         const userAnswer = (answers[q._id] || '').trim().toLowerCase();
         finalAnswers.push(userAnswer);
-        if (userAnswer === q.correctAnswer.trim().toLowerCase()) score++;
+        if (userAnswer === q.correctAnswer?.trim().toLowerCase()) score++;
       });
     });
 
@@ -69,7 +67,8 @@ const ListeningModule: React.FC<ListeningModuleProps> = ({ testId, onComplete, o
   if (error || !test) return <div className="text-center text-red-600 py-20"><AlertCircle size={48} className="mx-auto mb-4" /><p>{error}</p></div>;
 
   const section = test.sections[0];
-  // Ensure audio URL points to the backend server
+  
+  // Clean, dynamic URL pointing to your newly fixed backend static folder
   const audioUrl = section.audioUrl.startsWith('http') ? section.audioUrl : `http://localhost:5000${section.audioUrl}`;
 
   return (
@@ -102,7 +101,7 @@ const ListeningModule: React.FC<ListeningModuleProps> = ({ testId, onComplete, o
             <div className="text-slate-600 font-medium w-32 text-center">
               {isPlaying ? "Playing..." : "Paused"}
             </div>
-            {/* Hidden Audio Element */}
+            {/* The Audio Player */}
             <audio 
               ref={audioRef} 
               src={audioUrl} 

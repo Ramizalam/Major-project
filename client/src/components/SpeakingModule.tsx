@@ -92,7 +92,8 @@ const SpeakingModule: React.FC<SpeakingModuleProps> = ({ testId, onComplete }) =
 
   const startInterview = () => {
     setHasStarted(true);
-    askQuestion(test.part1.questions[0]);
+    const initialPrompt = test.part1.questions[0] || "Hello, let's begin the interview.";
+    askQuestion(initialPrompt);
   };
 
   const startRecording = () => {
@@ -116,7 +117,6 @@ const SpeakingModule: React.FC<SpeakingModuleProps> = ({ testId, onComplete }) =
   const evaluateAndFinish = async (allResponses: string[]) => {
     setIsEvaluating(true);
     try {
-      // Send the entire conversation transcript to Gemini
       const transcriptStr = allResponses.join(' \n ');
       const res = await axios.post('http://localhost:5000/api/speaking/evaluate', {
         transcript: transcriptStr,
@@ -125,9 +125,9 @@ const SpeakingModule: React.FC<SpeakingModuleProps> = ({ testId, onComplete }) =
 
       const evalData = res.data.evaluation;
       onComplete({ 
-        part1Score: evalData.overallBand || 0, 
-        part2Score: evalData.overallBand || 0, 
-        part3Score: evalData.overallBand || 0, 
+        part1Score: evalData?.overallBand || 0, 
+        part2Score: evalData?.overallBand || 0, 
+        part3Score: evalData?.overallBand || 0, 
         responses: allResponses, 
         timeSpent: 900,
         evaluation: evalData
@@ -135,7 +135,6 @@ const SpeakingModule: React.FC<SpeakingModuleProps> = ({ testId, onComplete }) =
 
     } catch (err) {
       console.error("AI Speaking Evaluation Failed", err);
-      // Fallback
       onComplete({ part1Score: 0, part2Score: 0, part3Score: 0, responses: allResponses, timeSpent: 900 });
     }
   };
@@ -146,12 +145,11 @@ const SpeakingModule: React.FC<SpeakingModuleProps> = ({ testId, onComplete }) =
     let currentResponse = liveTranscript.trim();
     if (isRecording) stopRecording();
     
-    // Save response before moving on
     const updatedResponses = currentResponse.length > 0 ? [...responses, currentResponse] : [...responses, "(No answer provided)"];
     setResponses(updatedResponses);
 
     const partKey = `part${currentPart}` as 'part1' | 'part2' | 'part3';
-    const totalQuestions = currentPart === 2 ? 1 : test[partKey].questions.length;
+    const totalQuestions = currentPart === 2 ? 1 : (test[partKey]?.questions?.length || 1);
 
     let nextPart = currentPart;
     let nextIdx = currentQuestionIdx;
@@ -162,7 +160,6 @@ const SpeakingModule: React.FC<SpeakingModuleProps> = ({ testId, onComplete }) =
       nextPart++;
       nextIdx = 0;
     } else {
-      // INTERVIEW COMPLETE! Send to AI Grader
       evaluateAndFinish(updatedResponses);
       return;
     }
@@ -171,7 +168,13 @@ const SpeakingModule: React.FC<SpeakingModuleProps> = ({ testId, onComplete }) =
     setCurrentQuestionIdx(nextIdx);
 
     const nextTestPartKey = `part${nextPart}` as 'part1' | 'part2' | 'part3';
-    const nextPromptText = nextPart === 2 ? test.part2.cueCard : test[nextTestPartKey].questions[nextIdx];
+    
+    let nextPromptText = "Please continue.";
+    if (nextPart === 2) {
+         nextPromptText = test.part2?.cueCard || "Please speak about a topic of your choice.";
+    } else if (test[nextTestPartKey]?.questions) {
+         nextPromptText = test[nextTestPartKey].questions[nextIdx];
+    }
     
     finalTranscriptRef.current = '';
     setLiveTranscript('');
@@ -186,7 +189,6 @@ const SpeakingModule: React.FC<SpeakingModuleProps> = ({ testId, onComplete }) =
       <div className="min-h-[70vh] flex flex-col items-center justify-center text-center p-8">
         <Loader size={64} className="animate-spin text-emerald-500 mb-6" />
         <h2 className="text-3xl font-black text-slate-800 mb-4">AI is Evaluating Your Speech...</h2>
-        <p className="text-slate-500 text-lg max-w-md">Gemini is analyzing your transcript for fluency, grammatical range, lexical resource, and pronunciation to calculate your IELTS Band Score.</p>
       </div>
     );
   }

@@ -1,7 +1,7 @@
 const express = require('express');
 const mongoose = require('mongoose');
 const SpeakingTest = require('../models/SpeakingTest');
-const { generateSpeakingFeedback } = require('../services/feedbackService');
+const { generateSpeakingFeedback } = require('../services/feedbackService'); // Make sure this path is correct!
 const router = express.Router();
 
 // GET /api/speaking
@@ -38,12 +38,18 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-// POST /api/speaking/evaluate
+// POST /api/speaking/evaluate - Connects to Google Gemini!
 router.post('/evaluate', async (req, res) => {
   try {
     const { transcript, partNumber } = req.body;
-    if (!transcript) return res.status(400).json({ message: 'Transcript required' });
-    const evaluation = await generateSpeakingFeedback(transcript, partNumber);
+    
+    if (!transcript) {
+      return res.status(400).json({ message: 'Transcript is required' });
+    }
+
+    // Call your feedbackService which talks to Gemini
+    const evaluation = await generateSpeakingFeedback(transcript, partNumber || 3);
+    
     res.json({ success: true, evaluation });
   } catch (err) {
     console.error("Speaking evaluate error:", err);

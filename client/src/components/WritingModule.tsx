@@ -122,9 +122,10 @@ const WritingModule: React.FC<WritingModuleProps> = ({ testId, onComplete, onCan
           {/* Prompt Section */}
           <div className="p-8 border-r border-slate-200 overflow-y-auto bg-slate-50">
             <h3 className="text-xl font-bold mb-4 text-slate-800">Writing Task {currentTask}</h3>
-            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 mb-6 whitespace-pre-line text-slate-700 leading-relaxed font-medium">
-              {currentPrompt.prompt}
-            </div>
+      <div 
+               className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 mb-6 whitespace-pre-line text-slate-700 leading-relaxed font-medium"
+               dangerouslySetInnerHTML={{ __html: currentPrompt.prompt }}
+            />
             {currentTask === 1 && currentPrompt.imageUrl && (
               <div className="rounded-2xl overflow-hidden border-2 border-slate-200 shadow-md">
                 <img src={currentPrompt.imageUrl} alt="Task 1 Chart" className="w-full object-contain bg-white" />
