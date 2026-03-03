@@ -21,9 +21,10 @@ const SpeakingModule: React.FC<SpeakingModuleProps> = ({ testId, onComplete }) =
   
   const [isExaminerSpeaking, setIsExaminerSpeaking] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
+  const [isEvaluating, setIsEvaluating] = useState(false);
   
   const [liveTranscript, setLiveTranscript] = useState('');
-  const finalTranscriptRef = useRef(''); // STORES CONFIRMED WORDS
+  const finalTranscriptRef = useRef(''); 
   const [responses, setResponses] = useState<string[]>([]);
   const [examinerPrompt, setExaminerPrompt] = useState('Welcome to your speaking test.');
 
@@ -52,7 +53,6 @@ const SpeakingModule: React.FC<SpeakingModuleProps> = ({ testId, onComplete }) =
       recognition.continuous = true;
       recognition.interimResults = true;
       
-      // THIS IS THE FIX FOR THE LIVE TRANSCRIPT
       recognition.onresult = (event: any) => {
         let interimTranscript = '';
         for (let i = event.resultIndex; i < event.results.length; ++i) {
@@ -110,16 +110,46 @@ const SpeakingModule: React.FC<SpeakingModuleProps> = ({ testId, onComplete }) =
     if (recognitionRef.current && isRecording) {
       recognitionRef.current.stop();
       setIsRecording(false);
-      if (liveTranscript.trim().length > 0) {
-        setResponses(prev => [...prev, liveTranscript.trim()]);
-      }
+    }
+  };
+
+  const evaluateAndFinish = async (allResponses: string[]) => {
+    setIsEvaluating(true);
+    try {
+      // Send the entire conversation transcript to Gemini
+      const transcriptStr = allResponses.join(' \n ');
+      const res = await axios.post('http://localhost:5000/api/speaking/evaluate', {
+        transcript: transcriptStr,
+        partNumber: 3
+      });
+
+      const evalData = res.data.evaluation;
+      onComplete({ 
+        part1Score: evalData.overallBand || 0, 
+        part2Score: evalData.overallBand || 0, 
+        part3Score: evalData.overallBand || 0, 
+        responses: allResponses, 
+        timeSpent: 900,
+        evaluation: evalData
+      });
+
+    } catch (err) {
+      console.error("AI Speaking Evaluation Failed", err);
+      // Fallback
+      onComplete({ part1Score: 0, part2Score: 0, part3Score: 0, responses: allResponses, timeSpent: 900 });
     }
   };
 
   const handleNext = () => {
     if (isExaminerSpeaking) return;
+    
+    let currentResponse = liveTranscript.trim();
     if (isRecording) stopRecording();
     
+    // Save response before moving on
+    const updatedResponses = currentResponse.length > 0 ? [...responses, currentResponse] : [...responses, "(No answer provided)"];
+    setResponses(updatedResponses);
+
     const partKey = `part${currentPart}` as 'part1' | 'part2' | 'part3';
     const totalQuestions = currentPart === 2 ? 1 : test[partKey].questions.length;
 
@@ -132,7 +162,8 @@ const SpeakingModule: React.FC<SpeakingModuleProps> = ({ testId, onComplete }) =
       nextPart++;
       nextIdx = 0;
     } else {
-      onComplete({ part1Score: 0, part2Score: 0, part3Score: 0, responses, timeSpent: 900 });
+      // INTERVIEW COMPLETE! Send to AI Grader
+      evaluateAndFinish(updatedResponses);
       return;
     }
 
@@ -149,6 +180,16 @@ const SpeakingModule: React.FC<SpeakingModuleProps> = ({ testId, onComplete }) =
 
   if (loading) return <div className="flex justify-center py-20"><Loader className="animate-spin text-emerald-500" size={40} /></div>;
   if (error || !test) return <div className="text-center text-red-600 py-20"><AlertCircle size={48} className="mx-auto mb-4" /><p>{error}</p></div>;
+
+  if (isEvaluating) {
+    return (
+      <div className="min-h-[70vh] flex flex-col items-center justify-center text-center p-8">
+        <Loader size={64} className="animate-spin text-emerald-500 mb-6" />
+        <h2 className="text-3xl font-black text-slate-800 mb-4">AI is Evaluating Your Speech...</h2>
+        <p className="text-slate-500 text-lg max-w-md">Gemini is analyzing your transcript for fluency, grammatical range, lexical resource, and pronunciation to calculate your IELTS Band Score.</p>
+      </div>
+    );
+  }
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="max-w-6xl mx-auto p-6 min-h-screen">
@@ -176,7 +217,6 @@ const SpeakingModule: React.FC<SpeakingModuleProps> = ({ testId, onComplete }) =
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-2 h-[75vh]">
             
-            {/* EXAMINER PANEL */}
             <div className="bg-slate-800/50 p-10 flex flex-col items-center justify-center border-r border-slate-700 relative">
               <div className="absolute top-6 left-6 bg-slate-800 px-4 py-1 rounded-full text-xs font-bold text-slate-400 tracking-widest border border-slate-700">Examiner</div>
               <div className={`relative mb-8 rounded-full p-2 ${isExaminerSpeaking ? 'bg-emerald-500/20' : 'bg-transparent'}`}>
@@ -188,7 +228,6 @@ const SpeakingModule: React.FC<SpeakingModuleProps> = ({ testId, onComplete }) =
               </div>
             </div>
 
-            {/* CANDIDATE PANEL */}
             <div className="bg-slate-900 p-10 flex flex-col justify-between relative">
               <div className="absolute top-6 left-6 bg-slate-800 px-4 py-1 rounded-full text-xs font-bold text-slate-400 tracking-widest border border-slate-700">Candidate (You)</div>
 
