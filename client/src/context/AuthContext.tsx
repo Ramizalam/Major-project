@@ -1,53 +1,70 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
-
-interface User {
-    _id: string;
-    email: string;
-    role: string;
-    token: string;
-}
+import React, { createContext, useState, useContext, useEffect, ReactNode } from 'react';
 
 interface AuthContextType {
-    user: User | null;
-    login: (userData: User) => void;
-    logout: () => void;
-    isAdmin: boolean;
+  user: any;
+  isAdmin: boolean;
+  loading: boolean;
+  login: (userData: any, token: string) => void;
+  logout: () => void;
 }
 
-const AuthContext = createContext<AuthContextType>({
-    user: null,
-    login: () => { },
-    logout: () => { },
-    isAdmin: false,
-});
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export const useAuth = () => useContext(AuthContext);
+export const AuthProvider = ({ children }: { children: ReactNode }) => {
+  const [user, setUser] = useState<any>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [loading, setLoading] = useState(true); // <--- Loading state added
 
-export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-    const [user, setUser] = useState<User | null>(null);
+  useEffect(() => {
+    const initAuth = () => {
+      const token = localStorage.getItem('token');
+      const savedUser = localStorage.getItem('user');
 
-    useEffect(() => {
-        const storedUser = localStorage.getItem('user');
-        if (storedUser) {
-            setUser(JSON.parse(storedUser));
+      // Reject corrupted tokens
+      if (token && token !== 'undefined' && token !== 'null' && savedUser && savedUser !== 'undefined') {
+        try {
+          const parsedUser = JSON.parse(savedUser);
+          setUser(parsedUser);
+          setIsAdmin(parsedUser?.role === 'admin');
+        } catch (error) {
+          console.error("Failed to parse user", error);
         }
-    }, []);
-
-    const login = (userData: User) => {
-        setUser(userData);
-        localStorage.setItem('user', JSON.stringify(userData));
-    };
-
-    const logout = () => {
-        setUser(null);
+      } else {
+        // If the token is fake/glitched, wipe it out immediately
+        localStorage.removeItem('token');
         localStorage.removeItem('user');
+      }
+      setLoading(false); // Done checking
     };
 
-    const isAdmin = user?.role === 'admin';
+    initAuth();
+  }, []);
 
-    return (
-        <AuthContext.Provider value={{ user, login, logout, isAdmin }}>
-            {children}
-        </AuthContext.Provider>
-    );
+  const login = (userData: any, token: string) => {
+    localStorage.setItem('token', token);
+    localStorage.setItem('user', JSON.stringify(userData));
+    setUser(userData);
+    setIsAdmin(userData?.role === 'admin');
+  };
+
+  const logout = () => {
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    setUser(null);
+    setIsAdmin(false);
+  };
+
+  return (
+    <AuthContext.Provider value={{ user, isAdmin, loading, login, logout }}>
+      {children}
+    </AuthContext.Provider>
+  );
+};
+
+export const useAuth = () => {
+  const context = useContext(AuthContext);
+  if (context === undefined) {
+    throw new Error('useAuth must be used within an AuthProvider');
+  }
+  return context;
 };

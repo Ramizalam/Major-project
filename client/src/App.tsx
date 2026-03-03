@@ -1,4 +1,13 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+
+// Core Application Screens
+import LandingPage from './components/LandingPage';
+import SelectionScreen from './components/SelectionScreen';
+import AuthScreen from './components/AuthScreen';
+import PreparationScreen from './components/PreparationScreen'; // <-- New Import
+
+// Test Modules
 import WelcomeScreen from './components/WelcomeScreen';
 import ListeningModule from './components/ListeningModule';
 import ReadingModule from './components/ReadingModule';
@@ -6,6 +15,14 @@ import WritingModule from './components/WritingModule';
 import SpeakingModule from './components/SpeakingModule';
 import ResultsScreen from './components/ResultsScreen';
 
+// Admin & Auth
+import { AuthProvider, useAuth } from './context/AuthContext';
+import AdminLogin from './components/AdminLogin';
+import AdminDashboard from './components/AdminDashboard';
+
+// ==========================================
+// INTERFACES 
+// ==========================================
 export interface WritingFeedback {
   taskAchievement?: { score: number; feedback: string };
   coherenceAndCohesion?: { score: number; feedback: string };
@@ -54,12 +71,31 @@ export interface TestResults {
     evaluation?: SpeakingEvaluation;
   };
 }
+// ==========================================
+// PROTECTED ROUTE WRAPPER
+// ==========================================
+const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
+  const { user, loading } = useAuth();
+  
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-slate-900 flex items-center justify-center text-cyan-400">
+        <h2>Loading your secure profile...</h2>
+      </div>
+    );
+  }
 
-import { AuthProvider, useAuth } from './context/AuthContext';
-import AdminLogin from './components/AdminLogin';
-import AdminDashboard from './components/AdminDashboard';
+  if (!user) {
+    return <Navigate to="/auth" replace />;
+  }
 
-function AppContent() {
+  return <>{children}</>;
+};
+
+// ==========================================
+// PRACTICE AREA COMPONENT
+// ==========================================
+function PracticeArea() {
   const [currentModule, setCurrentModule] = useState<'welcome' | 'listening' | 'reading' | 'writing' | 'speaking' | 'results' | 'admin'>('welcome');
   const [testResults, setTestResults] = useState<Partial<TestResults>>({});
   const [testMode, setTestMode] = useState<'full' | 'single'>('full');
@@ -69,13 +105,11 @@ function AppContent() {
   const handleModuleComplete = (module: keyof TestResults, results: any) => {
     setTestResults(prev => ({ ...prev, [module]: results }));
 
-    // If in single section mode, go straight to results
     if (testMode === 'single') {
       setCurrentModule('results');
       return;
     }
 
-    // Navigate to next module
     const moduleOrder = ['listening', 'reading', 'writing', 'speaking'];
     const currentIndex = moduleOrder.indexOf(module);
 
@@ -127,6 +161,7 @@ function AppContent() {
       {currentModule === 'results' && (
         <ResultsScreen results={testResults as TestResults} onReset={resetTest} />
       )}
+      
       {currentModule === 'admin' && !isAdmin && (
         <AdminLogin
           onLoginSuccess={() => setCurrentModule('admin')}
@@ -141,10 +176,39 @@ function AppContent() {
   );
 }
 
+// ==========================================
+// MAIN APP ROUTING
+// ==========================================
 const App = () => {
   return (
     <AuthProvider>
-      <AppContent />
+      <Router>
+        <Routes>
+          {/* Public Routes */}
+          <Route path="/" element={<LandingPage />} />
+          <Route path="/auth" element={<AuthScreen />} />
+          
+          {/* Protected Routes */}
+          <Route path="/selection" element={
+            <ProtectedRoute>
+              <SelectionScreen />
+            </ProtectedRoute>
+          } />
+          
+          {/* The new Preparation Route! */}
+          <Route path="/preparation" element={
+            <ProtectedRoute>
+              <PreparationScreen />
+            </ProtectedRoute>
+          } />
+          
+          <Route path="/dashboard" element={
+            <ProtectedRoute>
+              <PracticeArea />
+            </ProtectedRoute>
+          } />
+        </Routes>
+      </Router>
     </AuthProvider>
   );
 };

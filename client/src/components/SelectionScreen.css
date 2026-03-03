@@ -1,0 +1,184 @@
+/* Base Container */
+.selection-container {
+  min-height: 100vh;
+  background-color: #020617;
+  color: #f8fafc;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+  font-family: 'Inter', system-ui, sans-serif;
+  padding: 2rem;
+}
+
+/* Ambient Background Glow */
+.ambient-glow {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 80vw;
+  height: 80vh;
+  background: radial-gradient(circle, rgba(79, 70, 229, 0.15) 0%, rgba(2, 6, 23, 0) 70%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Back Button */
+.back-btn {
+  position: absolute;
+  top: 40px;
+  left: 40px;
+  background: rgba(30, 41, 59, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #94a3b8;
+  padding: 12px 24px;
+  border-radius: 50px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 1rem;
+  backdrop-filter: blur(10px);
+  transition: all 0.3s ease;
+  z-index: 20;
+}
+
+.back-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #f8fafc;
+  transform: translateX(-5px);
+}
+
+.back-icon {
+  width: 20px;
+  height: 20px;
+}
+
+/* Header Section */
+.selection-header {
+  text-align: center;
+  z-index: 10;
+  margin-bottom: 4rem;
+}
+
+.selection-badge {
+  margin: 0 auto 1.5rem auto;
+}
+
+.selection-title {
+  font-size: 4.5rem;
+  font-weight: 900;
+  margin: 0 0 1rem 0;
+}
+
+.selection-subtitle {
+  font-size: 1.3rem;
+  color: #94a3b8;
+}
+
+/* Cards Grid */
+.selection-grid {
+  display: flex;
+  gap: 3rem;
+  z-index: 10;
+  max-width: 1100px;
+  width: 100%;
+}
+
+.path-card {
+  flex: 1;
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 40px;
+  padding: 3.5rem;
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+  backdrop-filter: blur(25px);
+  display: flex;
+  flex-direction: column;
+  transition: border-color 0.4s ease, box-shadow 0.4s ease;
+}
+
+.prep-card:hover {
+  border-color: rgba(6, 182, 212, 0.5);
+  box-shadow: 0 25px 50px -12px rgba(6, 182, 212, 0.25);
+}
+
+.practice-card:hover {
+  border-color: rgba(236, 72, 153, 0.5);
+  box-shadow: 0 25px 50px -12px rgba(236, 72, 153, 0.25);
+}
+
+/* Internal Glowing Orbs */
+.card-glow {
+  position: absolute;
+  top: -50px;
+  right: -50px;
+  width: 200px;
+  height: 200px;
+  border-radius: 50%;
+  filter: blur(60px);
+  opacity: 0.3;
+  transition: opacity 0.4s ease;
+}
+
+.prep-glow { background: #06b6d4; }
+.practice-glow { background: #ec4899; }
+
+.path-card:hover .card-glow { opacity: 0.8; }
+
+/* Icons */
+.path-icon {
+  width: 70px;
+  height: 70px;
+  margin-bottom: 2.5rem;
+  background: rgba(255, 255, 255, 0.05);
+  padding: 15px;
+  border-radius: 20px;
+}
+
+.prep-icon { color: #06b6d4; }
+.practice-icon { color: #ec4899; }
+
+/* Typography inside Cards */
+.path-card h2 {
+  font-size: 2.5rem;
+  font-weight: 800;
+  margin: 0 0 1.5rem 0;
+  color: #f8fafc;
+}
+
+.path-card p {
+  color: #94a3b8;
+  font-size: 1.2rem;
+  line-height: 1.7;
+  flex-grow: 1;
+  margin-bottom: 3rem;
+}
+
+/* Call to Action Text inside Card */
+.path-action {
+  font-weight: 800;
+  font-size: 1.3rem;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.prep-card .path-action { color: #06b6d4; }
+.practice-card .path-action { color: #ec4899; }
+
+/* Responsive Adjustments */
+@media (max-width: 900px) {
+  .selection-grid { flex-direction: column; }
+  .selection-title { font-size: 3.5rem; }
+  .back-btn { top: 20px; left: 20px; padding: 10px 20px; font-size: 0.9rem; }
+}

@@ -15,8 +15,17 @@ app.use(express.json());
 const authRoutes = require('./routes/auth');
 app.use('/api/auth', authRoutes);
 
+
+
+// --- ADD THESE TWO LINES ---
+const analyticsRoutes = require('./routes/analytics');
+app.use('/api/analytics', analyticsRoutes);
+// ---------------------------
+
 // Serve static files from public directory
 app.use('/public', express.static('public'));
+
+// Serve static files from public directory
 
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/ielts_prep';
 const PORT = process.env.PORT || 5000;
