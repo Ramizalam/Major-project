@@ -6,7 +6,7 @@ const ai = new GoogleGenAI({apiKey: GEMINI_API_KEY});
 async function main() {
   const response = await ai.models.generateContent({
     model: 'gemini-2.5-flash',
-    contents: 'Why is the sky blue?',
+    contents: 'Wy is  sky blue?',
   });
   console.log(response.text);
 }
