@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { BookOpen, Headphones, PenTool, Mic, PlayCircle, RotateCcw, BarChart2, X, Loader } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import axios from 'axios';
-import './WelcomeScreen.css'; 
+import './WelcomeScreen.css';
 
 interface WelcomeScreenProps {
   onStart: (module?: 'listening' | 'reading' | 'writing' | 'speaking', testId?: string) => void;
@@ -16,30 +16,34 @@ const PracticeHub: React.FC<WelcomeScreenProps> = ({ onStart }) => {
   const [loading, setLoading] = useState(true);
   const [analysisModal, setAnalysisModal] = useState<any[] | null>(null);
 
-  // Fetch tests for the active tab and user history
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
+      const token = localStorage.getItem('token');
+      const headers = { Authorization: `Bearer ${token}` };
+
+      // 1. Fetch User History Safely (Won't crash if Analytics doesn't exist)
       try {
-        const token = localStorage.getItem('token');
-        const headers = { Authorization: `Bearer ${token}` };
-
-        // 1. Fetch User History
         const historyRes = await axios.get('http://localhost:5000/api/analytics/dashboard', { headers });
-        const userAttempts = historyRes.data.progress?.attemptsHistory || [];
-        setHistory(userAttempts);
+        setHistory(historyRes.data.progress?.attemptsHistory || []);
+      } catch (error) {
+        console.log('Analytics history skipped or backend missing analytics route.');
+      }
 
-        // 2. Fetch Tests based on active tab
+      // 2. Fetch Tests Safely
+      try {
         if (activeTab !== 'full') {
           const testRes = await axios.get(`http://localhost:5000/api/${activeTab}`);
           setTests(testRes.data);
         } else {
-          // Mock 10 Full Tests for the UI
+          // Generate 10 Full Tests for the UI
           setTests(Array.from({ length: 10 }, (_, i) => ({ _id: `full_${i+1}`, title: `Full Mock Test ${i + 1}`, isFull: true })));
         }
       } catch (error) {
-        console.error('Error fetching practice data:', error);
+        console.error('Error fetching tests! Make sure your backend server is running.', error);
+        alert('Network Error: Cannot connect to the backend server (localhost:5000). Please make sure your Node.js server is running!');
       }
+      
       setLoading(false);
     };
     fetchData();
@@ -57,7 +61,6 @@ const PracticeHub: React.FC<WelcomeScreenProps> = ({ onStart }) => {
 
   return (
     <div className="min-h-screen bg-slate-900 text-slate-100 p-8 relative overflow-hidden font-sans">
-      {/* Background Glow */}
       <div className="absolute top-[-20%] left-[50%] translate-x-[-50%] w-[800px] h-[800px] bg-cyan-500/10 rounded-full blur-[120px] pointer-events-none"></div>
 
       <div className="max-w-6xl mx-auto relative z-10">
@@ -66,22 +69,26 @@ const PracticeHub: React.FC<WelcomeScreenProps> = ({ onStart }) => {
           <p className="text-slate-400 text-lg">Select a section to practice. Your progress and scores are automatically saved.</p>
         </div>
 
-        {/* Tabs */}
         <div className="flex flex-wrap justify-center gap-4 mb-10">
           <button onClick={() => setActiveTab('full')} className={`flex items-center gap-2 px-6 py-3 rounded-full font-bold transition-all ${activeTab === 'full' ? 'bg-cyan-500 text-white shadow-[0_0_20px_rgba(6,182,212,0.4)]' : 'bg-slate-800/50 text-slate-400 border border-slate-700 hover:bg-slate-800'}`}><BookOpen size={18}/> Full Mock Tests (10)</button>
-          <button onClick={() => setActiveTab('reading')} className={`flex items-center gap-2 px-6 py-3 rounded-full font-bold transition-all ${activeTab === 'reading' ? 'bg-blue-500 text-white shadow-[0_0_20px_rgba(59,130,246,0.4)]' : 'bg-slate-800/50 text-slate-400 border border-slate-700 hover:bg-slate-800'}`}><BookOpen size={18}/> Reading (10)</button>
-          <button onClick={() => setActiveTab('listening')} className={`flex items-center gap-2 px-6 py-3 rounded-full font-bold transition-all ${activeTab === 'listening' ? 'bg-purple-500 text-white shadow-[0_0_20px_rgba(168,85,247,0.4)]' : 'bg-slate-800/50 text-slate-400 border border-slate-700 hover:bg-slate-800'}`}><Headphones size={18}/> Listening (10)</button>
-          <button onClick={() => setActiveTab('writing')} className={`flex items-center gap-2 px-6 py-3 rounded-full font-bold transition-all ${activeTab === 'writing' ? 'bg-pink-500 text-white shadow-[0_0_20px_rgba(236,72,153,0.4)]' : 'bg-slate-800/50 text-slate-400 border border-slate-700 hover:bg-slate-800'}`}><PenTool size={18}/> Writing (10)</button>
-          <button onClick={() => setActiveTab('speaking')} className={`flex items-center gap-2 px-6 py-3 rounded-full font-bold transition-all ${activeTab === 'speaking' ? 'bg-green-500 text-white shadow-[0_0_20px_rgba(34,197,94,0.4)]' : 'bg-slate-800/50 text-slate-400 border border-slate-700 hover:bg-slate-800'}`}><Mic size={18}/> Speaking (10)</button>
+          <button onClick={() => setActiveTab('reading')} className={`flex items-center gap-2 px-6 py-3 rounded-full font-bold transition-all ${activeTab === 'reading' ? 'bg-blue-500 text-white shadow-[0_0_20px_rgba(59,130,246,0.4)]' : 'bg-slate-800/50 text-slate-400 border border-slate-700 hover:bg-slate-800'}`}><BookOpen size={18}/> Reading (20)</button>
+          <button onClick={() => setActiveTab('listening')} className={`flex items-center gap-2 px-6 py-3 rounded-full font-bold transition-all ${activeTab === 'listening' ? 'bg-purple-500 text-white shadow-[0_0_20px_rgba(168,85,247,0.4)]' : 'bg-slate-800/50 text-slate-400 border border-slate-700 hover:bg-slate-800'}`}><Headphones size={18}/> Listening (20)</button>
+          <button onClick={() => setActiveTab('writing')} className={`flex items-center gap-2 px-6 py-3 rounded-full font-bold transition-all ${activeTab === 'writing' ? 'bg-pink-500 text-white shadow-[0_0_20px_rgba(236,72,153,0.4)]' : 'bg-slate-800/50 text-slate-400 border border-slate-700 hover:bg-slate-800'}`}><PenTool size={18}/> Writing (20)</button>
+          <button onClick={() => setActiveTab('speaking')} className={`flex items-center gap-2 px-6 py-3 rounded-full font-bold transition-all ${activeTab === 'speaking' ? 'bg-green-500 text-white shadow-[0_0_20px_rgba(34,197,94,0.4)]' : 'bg-slate-800/50 text-slate-400 border border-slate-700 hover:bg-slate-800'}`}><Mic size={18}/> Speaking (20)</button>
         </div>
 
-        {/* Test Grid */}
         {loading ? (
           <div className="flex justify-center items-center py-20"><Loader className="animate-spin text-cyan-400" size={40} /></div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {tests.length === 0 && (
+                <div className="col-span-full text-center py-20 text-red-400 border border-red-400/30 bg-red-400/10 rounded-2xl">
+                    <h3 className="text-xl font-bold mb-2">Backend Disconnected</h3>
+                    <p>We couldn't fetch the tests. Please ensure your backend server is running.</p>
+                </div>
+            )}
+            
             {tests.map((test, index) => {
-              // Check if user has attempted this exact test
               const attemptsForTest = history.filter(h => h.testId === test._id);
               const isAttempted = attemptsForTest.length > 0;
               const bestScore = isAttempted ? Math.max(...attemptsForTest.map(a => a.score)) : null;
@@ -125,7 +132,6 @@ const PracticeHub: React.FC<WelcomeScreenProps> = ({ onStart }) => {
         )}
       </div>
 
-      {/* Analysis Graph Modal */}
       <AnimatePresence>
         {analysisModal && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">

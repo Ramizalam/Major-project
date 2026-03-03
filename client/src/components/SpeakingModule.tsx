@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
-import { Mic, AlertCircle, Play, Square, ChevronRight, UserCircle, ShieldAlert, Loader } from 'lucide-react';
+import { Mic, AlertCircle, Square, ChevronRight, UserCircle, ShieldAlert, Loader } from 'lucide-react';
 import axios from 'axios';
 
 const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
@@ -23,6 +23,7 @@ const SpeakingModule: React.FC<SpeakingModuleProps> = ({ testId, onComplete }) =
   const [isRecording, setIsRecording] = useState(false);
   
   const [liveTranscript, setLiveTranscript] = useState('');
+  const finalTranscriptRef = useRef(''); // STORES CONFIRMED WORDS
   const [responses, setResponses] = useState<string[]>([]);
   const [examinerPrompt, setExaminerPrompt] = useState('Welcome to your speaking test.');
 
@@ -39,7 +40,7 @@ const SpeakingModule: React.FC<SpeakingModuleProps> = ({ testId, onComplete }) =
         if (!testData) throw new Error('No speaking test found');
         if (isMounted) setTest(testData);
       } catch (err: any) {
-        if (isMounted) setError(err.message || 'Failed to load speaking test');
+        if (isMounted) setError(err.message || 'Failed to load test');
       } finally { 
         if (isMounted) setLoading(false); 
       }
@@ -51,13 +52,17 @@ const SpeakingModule: React.FC<SpeakingModuleProps> = ({ testId, onComplete }) =
       recognition.continuous = true;
       recognition.interimResults = true;
       
+      // THIS IS THE FIX FOR THE LIVE TRANSCRIPT
       recognition.onresult = (event: any) => {
-        let currentTranscript = '';
+        let interimTranscript = '';
         for (let i = event.resultIndex; i < event.results.length; ++i) {
-          currentTranscript += event.results[i][0].transcript;
+          if (event.results[i].isFinal) {
+            finalTranscriptRef.current += event.results[i][0].transcript + ' ';
+          } else {
+            interimTranscript += event.results[i][0].transcript;
+          }
         }
-        // Force React to update state instantly as you speak
-        setLiveTranscript(prev => prev + " " + currentTranscript);
+        setLiveTranscript(finalTranscriptRef.current + interimTranscript);
       };
       
       recognitionRef.current = recognition;
@@ -69,22 +74,20 @@ const SpeakingModule: React.FC<SpeakingModuleProps> = ({ testId, onComplete }) =
   const askQuestion = (text: string) => {
     setExaminerPrompt(text);
     setIsExaminerSpeaking(true);
-    
     window.speechSynthesis.cancel();
     
-    // Chrome has a bug where voices won't load immediately. 
-    // We grab them, then speak.
     const voices = window.speechSynthesis.getVoices();
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.rate = 0.95; 
     
-    // Try to find a good English voice
     const englishVoice = voices.find(v => v.lang.includes('en-US') || v.lang.includes('en-GB'));
     if (englishVoice) utterance.voice = englishVoice;
     
     utterance.onend = () => setIsExaminerSpeaking(false);
     
-    window.speechSynthesis.speak(utterance);
+    setTimeout(() => {
+      window.speechSynthesis.speak(utterance);
+    }, 500);
   };
 
   const startInterview = () => {
@@ -94,20 +97,20 @@ const SpeakingModule: React.FC<SpeakingModuleProps> = ({ testId, onComplete }) =
 
   const startRecording = () => {
     if (isExaminerSpeaking) return;
-    if (!SpeechRecognition) {
-      alert("Browser doesn't support voice recognition. Use Chrome.");
-      return;
-    }
+    if (!SpeechRecognition) return alert("Browser doesn't support voice recognition. Use Chrome.");
+    
+    finalTranscriptRef.current = '';
     setLiveTranscript('');
     setIsRecording(true);
-    recognitionRef.current.start();
+    
+    try { recognitionRef.current.start(); } catch(e) {}
   };
 
   const stopRecording = () => {
     if (recognitionRef.current && isRecording) {
       recognitionRef.current.stop();
       setIsRecording(false);
-      if (liveTranscript) {
+      if (liveTranscript.trim().length > 0) {
         setResponses(prev => [...prev, liveTranscript.trim()]);
       }
     }
@@ -115,11 +118,7 @@ const SpeakingModule: React.FC<SpeakingModuleProps> = ({ testId, onComplete }) =
 
   const handleNext = () => {
     if (isExaminerSpeaking) return;
-    
-    // If they hit next while recording, stop it and save
-    if (isRecording) {
-        stopRecording();
-    }
+    if (isRecording) stopRecording();
     
     const partKey = `part${currentPart}` as 'part1' | 'part2' | 'part3';
     const totalQuestions = currentPart === 2 ? 1 : test[partKey].questions.length;
@@ -143,7 +142,7 @@ const SpeakingModule: React.FC<SpeakingModuleProps> = ({ testId, onComplete }) =
     const nextTestPartKey = `part${nextPart}` as 'part1' | 'part2' | 'part3';
     const nextPromptText = nextPart === 2 ? test.part2.cueCard : test[nextTestPartKey].questions[nextIdx];
     
-    // Clear old transcript from screen
+    finalTranscriptRef.current = '';
     setLiveTranscript('');
     askQuestion(nextPromptText);
   };
@@ -170,7 +169,7 @@ const SpeakingModule: React.FC<SpeakingModuleProps> = ({ testId, onComplete }) =
             <p className="text-slate-400 text-lg max-w-xl mb-8 leading-relaxed">
               The AI Examiner will speak out loud. <b>You cannot record while the Examiner is speaking.</b> Grant microphone permissions when prompted.
             </p>
-            <button onClick={startInterview} className="px-12 py-4 bg-emerald-600 hover:bg-emerald-500 text-white rounded-full font-bold text-xl shadow-[0_0_20px_rgba(5,150,105,0.5)] transition-all">
+            <button onClick={startInterview} className="px-12 py-4 bg-emerald-600 hover:bg-emerald-500 text-white rounded-full font-bold text-xl transition-all">
               Enter Interview Room
             </button>
           </div>
@@ -180,12 +179,10 @@ const SpeakingModule: React.FC<SpeakingModuleProps> = ({ testId, onComplete }) =
             {/* EXAMINER PANEL */}
             <div className="bg-slate-800/50 p-10 flex flex-col items-center justify-center border-r border-slate-700 relative">
               <div className="absolute top-6 left-6 bg-slate-800 px-4 py-1 rounded-full text-xs font-bold text-slate-400 tracking-widest border border-slate-700">Examiner</div>
-              
               <div className={`relative mb-8 rounded-full p-2 ${isExaminerSpeaking ? 'bg-emerald-500/20' : 'bg-transparent'}`}>
                 {isExaminerSpeaking && <div className="absolute inset-0 border-4 border-emerald-500 rounded-full animate-ping opacity-50"></div>}
                 <UserCircle size={140} className={isExaminerSpeaking ? "text-emerald-400" : "text-slate-600"} />
               </div>
-              
               <div className="bg-slate-900 p-6 rounded-2xl border border-slate-700 w-full shadow-inner min-h-[150px] flex items-center justify-center text-center">
                 <p className={`text-xl leading-relaxed font-medium ${isExaminerSpeaking ? 'text-white' : 'text-slate-400'}`}>"{examinerPrompt}"</p>
               </div>
@@ -196,25 +193,26 @@ const SpeakingModule: React.FC<SpeakingModuleProps> = ({ testId, onComplete }) =
               <div className="absolute top-6 left-6 bg-slate-800 px-4 py-1 rounded-full text-xs font-bold text-slate-400 tracking-widest border border-slate-700">Candidate (You)</div>
 
               <div className="flex-1 mt-12 bg-slate-800/30 rounded-2xl border border-slate-700 p-6 overflow-y-auto mb-8 relative">
-                {!liveTranscript && !isRecording && <p className="text-slate-500 text-center mt-10">Your live transcription will appear here when you speak...</p>}
+                {!liveTranscript && !isRecording && <p className="text-slate-500 text-center mt-10">Press "Record Answer" and start speaking...</p>}
+                {isRecording && !liveTranscript && <p className="text-emerald-500 text-center mt-10 animate-pulse">Listening to your microphone...</p>}
                 <p className="text-white text-lg leading-relaxed">{liveTranscript}</p>
               </div>
 
               <div className="flex flex-col items-center gap-6">
                 <div className="flex gap-4 w-full">
                   {!isRecording ? (
-                    <button onClick={startRecording} disabled={isExaminerSpeaking} className={`flex-1 flex flex-col items-center justify-center py-4 rounded-2xl transition-all ${isExaminerSpeaking ? 'bg-slate-800 text-slate-600 cursor-not-allowed border border-slate-700' : 'bg-red-500 hover:bg-red-600 text-white shadow-[0_0_20px_rgba(239,68,68,0.4)]'}`}>
+                    <button onClick={startRecording} disabled={isExaminerSpeaking} className={`flex-1 flex flex-col items-center justify-center py-4 rounded-2xl transition-all ${isExaminerSpeaking ? 'bg-slate-800 text-slate-600 cursor-not-allowed border border-slate-700' : 'bg-red-500 hover:bg-red-600 text-white'}`}>
                       <Mic size={28} className="mb-2" />
                       <span className="font-bold tracking-widest uppercase text-sm">Record Answer</span>
                     </button>
                   ) : (
-                    <button onClick={stopRecording} className="flex-1 flex flex-col items-center justify-center py-4 rounded-2xl bg-slate-800 hover:bg-slate-700 text-white border border-slate-600 animate-pulse shadow-xl">
+                    <button onClick={stopRecording} className="flex-1 flex flex-col items-center justify-center py-4 rounded-2xl bg-slate-800 hover:bg-slate-700 text-white border border-slate-600 animate-pulse">
                       <Square size={28} className="mb-2 text-red-500" />
                       <span className="font-bold tracking-widest uppercase text-sm">Stop Recording</span>
                     </button>
                   )}
                   
-                  <button onClick={handleNext} disabled={isExaminerSpeaking} className={`flex-1 flex flex-col items-center justify-center py-4 rounded-2xl transition-all ${isExaminerSpeaking ? 'bg-slate-800 text-slate-600 cursor-not-allowed border border-slate-700' : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-[0_0_20px_rgba(5,150,105,0.4)]'}`}>
+                  <button onClick={handleNext} disabled={isExaminerSpeaking} className={`flex-1 flex flex-col items-center justify-center py-4 rounded-2xl transition-all ${isExaminerSpeaking ? 'bg-slate-800 text-slate-600 cursor-not-allowed border border-slate-700' : 'bg-emerald-600 hover:bg-emerald-500 text-white'}`}>
                     <ChevronRight size={28} className="mb-2" />
                     <span className="font-bold tracking-widest uppercase text-sm">Next Question</span>
                   </button>
