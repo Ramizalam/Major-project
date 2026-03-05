@@ -94,8 +94,8 @@ const WritingModule: React.FC<WritingModuleProps> = ({ testId, onComplete, onCan
     return (
       <div className="min-h-[70vh] flex flex-col items-center justify-center text-center p-8">
         <Loader size={64} className="animate-spin text-pink-500 mb-6" />
-        <h2 className="text-3xl font-black text-slate-800 mb-4">we are Evaluating Your Essay...</h2>
-        <p className="text-slate-500 text-lg max-w-md">we are analyzing your vocabulary, grammar, coherence, and task achievement to calculate your official IELTS Band Score.</p>
+        <h2 className="text-3xl font-black text-slate-800 mb-4">WE ARE Evaluating Your Essay...</h2>
+        <p className="text-slate-500 text-lg max-w-md">We are analyzing your vocabulary, grammar, coherence, and task achievement to calculate your official IELTS Band Score.</p>
       </div>
     );
   }
