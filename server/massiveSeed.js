@@ -8,7 +8,35 @@ const SpeakingTest = require('./models/SpeakingTest');
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/ielts_prep';
 
 // =========================================================================
-// 1. EXACT LISTENING QUESTIONS (FROM YOUR PROMPT)
+// 1. DYNAMIC DATA FOR TESTS 11-30 (YOUR OLD QUESTIONS MERGED)
+// =========================================================================
+const allTopics = [
+  "Global Trade", "Renewable Energy", "Deep Sea Exploration", "Roman Architecture", "Cognitive Psychology", 
+  "AI in Healthcare", "Climate Change", "Language Evolution", "Quantum Computing", "Space Colonization",
+  "Music Psychology", "Agriculture History", "Nanotechnology", "Urban Planning", "Bird Migration",
+  "Cryptocurrency", "Renaissance Art", "Neuroplasticity", "Desert Ecosystems", "Industrial Revolution"
+];
+
+const getReadingQs = (topic) => [
+  { number: 1, type: 'true_false_not_given', text: `1. The initial theories regarding ${topic} were proven entirely correct by modern science.`, options: ['True', 'False', 'Not Given'], correctAnswer: 'False' },
+  { number: 2, type: 'true_false_not_given', text: `2. Funding for ${topic} research has doubled in the last five years.`, options: ['True', 'False', 'Not Given'], correctAnswer: 'Not Given' },
+  { number: 3, type: 'true_false_not_given', text: `3. Archaeological discoveries forced scholars to rethink the timeline of ${topic}.`, options: ['True', 'False', 'Not Given'], correctAnswer: 'True' },
+  { number: 4, type: 'true_false_not_given', text: `4. The general public is currently unaware of the implications of ${topic}.`, options: ['True', 'False', 'Not Given'], correctAnswer: 'False' },
+  { number: 5, type: 'true_false_not_given', text: `5. Future progress in ${topic} relies heavily on international cooperation.`, options: ['True', 'False', 'Not Given'], correctAnswer: 'True' },
+  { number: 6, type: 'multiple_choice', text: `6. What is the primary purpose of the first paragraph?`, options: ['To introduce historical context', 'To criticize older theories', 'To provide statistical data', 'To propose a new law'], correctAnswer: 'To introduce historical context' },
+  { number: 7, type: 'multiple_choice', text: `7. According to the text, what was the main flaw of early 20th-century scholars?`, options: ['Lack of funding', 'Ignored structural evidence', 'Poor technology', 'Language barriers'], correctAnswer: 'Ignored structural evidence' },
+  { number: 8, type: 'multiple_choice', text: `8. What does the word "unprecedented" refer to in the passage?`, options: ['The level of danger', 'The sudden surge in research', 'The cost of materials', 'The lack of interest'], correctAnswer: 'The sudden surge in research' },
+  { number: 9, type: 'multiple_choice', text: `9. Which sector is most likely to be affected by ${topic} in the next decade?`, options: ['Agriculture', 'Global sustainability', 'Entertainment', 'Transportation'], correctAnswer: 'Global sustainability' },
+  { number: 10, type: 'multiple_choice', text: `10. What is the author's overall tone regarding ${topic}?`, options: ['Pessimistic', 'Neutral', 'Optimistic and urgent', 'Sarcastic'], correctAnswer: 'Optimistic and urgent' },
+  { number: 11, type: 'fill_in_the_blank', text: `11. Early scholars mistakenly believed that progress in this field was completely ______.`, correctAnswer: 'accidental' },
+  { number: 12, type: 'fill_in_the_blank', text: `12. Recent evidence reveals that our ancestors used a highly ______ approach.`, correctAnswer: 'structured' },
+  { number: 13, type: 'fill_in_the_blank', text: `13. The next decade will experience a significant increase in ______ for this sector.`, correctAnswer: 'funding' },
+  { number: 14, type: 'fill_in_the_blank', text: `14. Local governments will need to adapt their strategies to handle new economic ______.`, correctAnswer: 'pressures' },
+  { number: 15, type: 'fill_in_the_blank', text: `15. The ultimate goal of studying ${topic} is to improve scientific ______.`, correctAnswer: 'progress' }
+];
+
+// =========================================================================
+// 2. LISTENING QUESTIONS (ALL 8 AUDIOS MERGED)
 // =========================================================================
 const libraryQuestions = [
   { number: 1, type: 'multiple_choice', text: '1. What is required to open a new library account?', options: ['Passport', 'Student ID', 'Utility Bill', 'Driver License'], correctAnswer: 'Student ID' },
@@ -82,8 +110,80 @@ const lectureQuestions = [
   { number: 15, type: 'multiple_choice', text: '15. What is the topic for next week’s lecture?', options: ['Viruses', 'Bacteria', 'Fungi', 'Evolution'], correctAnswer: 'Viruses' }
 ];
 
+const clinicQuestions = [
+  { number: 1, type: 'multiple_choice', text: '1. What is the name of the clinic?', options: ['A) Wellington Road Clinic', 'B) Wellington Street Health Clinic', 'C) West Street Health Centre', 'D) Wellington Medical Hospital'], correctAnswer: 'B) Wellington Street Health Clinic' },
+  { number: 2, type: 'multiple_choice', text: '2. Why does the patient call the clinic?', options: ['A) To ask about opening hours', 'B) To complain about a bill', 'C) To register and make an appointment', 'D) To request medical records'], correctAnswer: 'C) To register and make an appointment' },
+  { number: 3, type: 'multiple_choice', text: '3. How long has the patient had a cough?', options: ['A) One week', 'B) Two weeks', 'C) Three days', 'D) One month'], correctAnswer: 'B) Two weeks' },
+  { number: 4, type: 'multiple_choice', text: '4. What is the patient’s date of birth?', options: ['A) 21st August 1995', 'B) 12th July 1995', 'C) 12th August 1995', 'D) 22nd August 1996'], correctAnswer: 'C) 12th August 1995' },
+  { number: 5, type: 'multiple_choice', text: '5. Which document does the receptionist request?', options: ['A) Birth certificate', 'B) Bank statement', 'C) Utility bill', 'D) Photo ID'], correctAnswer: 'D) Photo ID' },
+  { number: 6, type: 'multiple_choice', text: '6. Which ID does the patient provide?', options: ['A) Passport', 'B) Driver\'s license', 'C) Student card', 'D) National ID card'], correctAnswer: 'B) Driver\'s license' },
+  { number: 7, type: 'multiple_choice', text: '7. What is the initial consultation fee?', options: ['A) £35', 'B) £40', 'C) £45', 'D) £50'], correctAnswer: 'C) £45' },
+  { number: 8, type: 'multiple_choice', text: '8. How can the patient pay the fee?', options: ['A) Only cash', 'B) Only card', 'C) Card or cash', 'D) Online transfer only'], correctAnswer: 'C) Card or cash' },
+  { number: 9, type: 'multiple_choice', text: '9. Which doctor is fully booked?', options: ['A) Dr. Evans', 'B) Dr. Brown', 'C) Dr. Smith', 'D) Dr. Taylor'], correctAnswer: 'C) Dr. Smith' },
+  { number: 10, type: 'multiple_choice', text: '10. Which doctor is available?', options: ['A) Dr. Smith', 'B) Dr. Evans', 'C) Dr. Green', 'D) Dr. White'], correctAnswer: 'B) Dr. Evans' },
+  { number: 11, type: 'multiple_choice', text: '11. When is the appointment scheduled?', options: ['A) Wednesday at 9:00 AM', 'B) Thursday at 10:15 AM', 'C) Friday at 10:15 AM', 'D) Thursday at 11:00 AM'], correctAnswer: 'B) Thursday at 10:15 AM' },
+  { number: 12, type: 'multiple_choice', text: '12. How much notice is required to cancel the appointment?', options: ['A) 12 hours', 'B) 24 hours', 'C) 48 hours', 'D) 72 hours'], correctAnswer: 'B) 24 hours' },
+  { number: 13, type: 'multiple_choice', text: '13. What should the patient bring to the appointment?', options: ['A) Insurance papers', 'B) Passport photos', 'C) Past medical history documents', 'D) Prescription medicines'], correctAnswer: 'C) Past medical history documents' },
+  { number: 14, type: 'multiple_choice', text: '14. Where is the parking lot located?', options: ['A) In front of the clinic', 'B) Next to the pharmacy', 'C) Behind the supermarket next door', 'D) Across the street'], correctAnswer: 'C) Behind the supermarket next door' },
+  { number: 15, type: 'multiple_choice', text: '15. Until what time is the on-site pharmacy open?', options: ['A) 5 PM', 'B) 6 PM', 'C) 7 PM', 'D) 8 PM'], correctAnswer: 'B) 6 PM' }
+];
+
+const wildlifeQuestions = [
+  { number: 1, type: 'multiple_choice', text: '1. What is the name of the wildlife park?', options: ['A. Greenfield Nature Park', 'B. Oakwood Wildlife Park', 'C. Lakeview Safari Park', 'D. Central Animal Reserve'], correctAnswer: 'B. Oakwood Wildlife Park' },
+  { number: 2, type: 'multiple_choice', text: '2. What is the name of the tour guide?', options: ['A. Daniel', 'B. Michael', 'C. David', 'D. Robert'], correctAnswer: 'C. David' },
+  { number: 3, type: 'multiple_choice', text: '3. Visitors are not allowed to feed the animals because:', options: ['A. It is expensive', 'B. The animals may become aggressive', 'C. The animals have specific diets', 'D. It is only allowed in winter'], correctAnswer: 'C. The animals have specific diets' },
+  { number: 4, type: 'multiple_choice', text: '4. The park was originally:', options: ['A. A zoo', 'B. A botanical garden', 'C. A rescue center', 'D. A picnic area'], correctAnswer: 'C. A rescue center' },
+  { number: 5, type: 'multiple_choice', text: '5. In which year was the park established?', options: ['A. 1975', 'B. 1985', 'C. 1995', 'D. 2005'], correctAnswer: 'B. 1985' },
+  { number: 6, type: 'multiple_choice', text: '6. The walking trail is:', options: ['A. 1.5 kilometers long', 'B. 2 kilometers long', 'C. 2.5 kilometers long', 'D. 3 kilometers long'], correctAnswer: 'C. 2.5 kilometers long' },
+  { number: 7, type: 'multiple_choice', text: '7. The walking trail goes around:', options: ['A. The mountains', 'B. The forest', 'C. The parking area', 'D. The central lake'], correctAnswer: 'D. The central lake' },
+  { number: 8, type: 'multiple_choice', text: '8. The Safari Bus departs from:', options: ['A. The Main Entrance', 'B. The South Gate', 'C. The North Gate', 'D. The Picnic Area'], correctAnswer: 'C. The North Gate' },
+  { number: 9, type: 'multiple_choice', text: '9. How often does the Safari Bus depart?', options: ['A. Every 30 minutes', 'B. Every hour', 'C. Twice a day', 'D. Every two hours'], correctAnswer: 'B. Every hour' },
+  { number: 10, type: 'multiple_choice', text: '10. The bird show takes place at:', options: ['A. 12:00 PM', 'B. 1:00 PM', 'C. 2:00 PM', 'D. 3:00 PM'], correctAnswer: 'C. 2:00 PM' },
+  { number: 11, type: 'multiple_choice', text: '11. The new attraction that opened last week is:', options: ['A. The Lion’s Den', 'B. The Reptile House', 'C. The Butterfly Tent', 'D. The Aquarium Hall'], correctAnswer: 'C. The Butterfly Tent' },
+  { number: 12, type: 'multiple_choice', text: '12. Visitors can eat their lunch:', options: ['A. On the bus', 'B. Near the enclosures', 'C. Anywhere in the park', 'D. In the Picnic Area'], correctAnswer: 'D. In the Picnic Area' },
+  { number: 13, type: 'multiple_choice', text: '13. In case of emergency, visitors should go to:', options: ['A. The Safari Bus', 'B. The Security Office', 'C. The Gift Shop', 'D. The Amphitheater'], correctAnswer: 'B. The Security Office' },
+  { number: 14, type: 'multiple_choice', text: '14. During summer, the park closes at:', options: ['A. 6 PM', 'B. 7 PM', 'C. 8 PM', 'D. 9 PM'], correctAnswer: 'B. 7 PM' },
+  { number: 15, type: 'multiple_choice', text: '15. What special product does the gift shop sell?', options: ['A. Handmade toys', 'B. Organic vegetables', 'C. Local honey', 'D. Animal paintings'], correctAnswer: 'C. Local honey' }
+];
+
+const gymQuestions = [
+  { number: 1, type: 'multiple_choice', text: '1. What is the name of the gym?', options: ['A) Fitness Pro Gym', 'B) FitLife Gym', 'C) Flex Gym', 'D) LifeStyle Fitness'], correctAnswer: 'B) FitLife Gym' },
+  { number: 2, type: 'multiple_choice', text: '2. Why is Anna calling the gym?', options: ['A) To cancel her membership', 'B) To book a personal trainer', 'C) To ask about membership options', 'D) To complain about facilities'], correctAnswer: 'C) To ask about membership options' },
+  { number: 3, type: 'multiple_choice', text: '3. What are the two types of memberships offered?', options: ['A) Weekly and monthly', 'B) Monthly and annual', 'C) Annual and lifetime', 'D) Student and corporate'], correctAnswer: 'B) Monthly and annual' },
+  { number: 4, type: 'multiple_choice', text: '4. How much does the monthly membership cost?', options: ['A) £40', 'B) £45', 'C) £50', 'D) £55'], correctAnswer: 'B) £45' },
+  { number: 5, type: 'multiple_choice', text: '5. What is the cost of the annual membership?', options: ['A) £420', 'B) £450', 'C) £480', 'D) £500'], correctAnswer: 'C) £480' },
+  { number: 6, type: 'multiple_choice', text: '6. How much money can Anna save by choosing the annual membership?', options: ['A) £45', 'B) £50', 'C) £60', 'D) £80'], correctAnswer: 'C) £60' },
+  { number: 7, type: 'multiple_choice', text: '7. Which of the following facilities is mentioned?', options: ['A) Sauna', 'B) Basketball court', 'C) Swimming pool', 'D) Tennis court'], correctAnswer: 'C) Swimming pool' },
+  { number: 8, type: 'multiple_choice', text: '8. Are yoga classes included in the membership?', options: ['A) No, they cost extra', 'B) Only for annual members', 'C) Yes, they are included', 'D) Only on weekends'], correctAnswer: 'C) Yes, they are included' },
+  { number: 9, type: 'multiple_choice', text: '9. How much does a personal training session cost?', options: ['A) £20', 'B) £25', 'C) £30', 'D) £35'], correctAnswer: 'B) £25' },
+  { number: 10, type: 'multiple_choice', text: '10. What time does the gym open on weekdays?', options: ['A) 5:00 AM', 'B) 6:00 AM', 'C) 7:00 AM', 'D) 8:00 AM'], correctAnswer: 'B) 6:00 AM' },
+  { number: 11, type: 'multiple_choice', text: '11. What time does the gym close on weekdays?', options: ['A) 9:00 PM', 'B) 10:00 PM', 'C) 8:00 PM', 'D) 11:00 PM'], correctAnswer: 'B) 10:00 PM' },
+  { number: 12, type: 'multiple_choice', text: '12. What are the weekend opening hours?', options: ['A) 6:00 AM – 10:00 PM', 'B) 7:00 AM – 9:00 PM', 'C) 8:00 AM – 8:00 PM', 'D) 9:00 AM – 6:00 PM'], correctAnswer: 'C) 8:00 AM – 8:00 PM' },
+  { number: 13, type: 'multiple_choice', text: '13. What is Anna’s full name?', options: ['A) Anna Wilson', 'B) Anna Williams', 'C) Anna Brown', 'D) Anna Smith'], correctAnswer: 'B) Anna Williams' },
+  { number: 14, type: 'multiple_choice', text: '14. What is Anna’s date of birth?', options: ['A) 4th March 1998', 'B) 14th April 1998', 'C) 14th March 1998', 'D) 24th March 1999'], correctAnswer: 'C) 14th March 1998' },
+  { number: 15, type: 'multiple_choice', text: '15. When will Anna’s membership start?', options: ['A) Today', 'B) Tomorrow', 'C) Next Monday', 'D) Next weekend'], correctAnswer: 'C) Next Monday' }
+];
+
+const brainQuestions = [
+  { number: 1, type: 'multiple_choice', text: '1. What is the lecture mainly about?', options: ['A. Mental health disorders', 'B. Brain surgery techniques', 'C. The structure and function of the human brain', 'D. Human evolution'], correctAnswer: 'C. The structure and function of the human brain' },
+  { number: 2, type: 'multiple_choice', text: '2. The brain consists of how many main parts?', options: ['A. Two', 'B. Three', 'C. Four', 'D. Five'], correctAnswer: 'B. Three' },
+  { number: 3, type: 'multiple_choice', text: '3. Which of the following is NOT mentioned as a main part of the brain?', options: ['A. Cerebrum', 'B. Cerebellum', 'C. Brainstem', 'D. Spinal cord'], correctAnswer: 'D. Spinal cord' },
+  { number: 4, type: 'multiple_choice', text: '4. Which part of the brain is the largest?', options: ['A. Cerebellum', 'B. Brainstem', 'C. Cerebrum', 'D. Spinal cord'], correctAnswer: 'C. Cerebrum' },
+  { number: 5, type: 'multiple_choice', text: '5. The cerebrum controls:', options: ['A. Digestion and sleep', 'B. Thinking and memory', 'C. Blood circulation', 'D. Body temperature'], correctAnswer: 'B. Thinking and memory' },
+  { number: 6, type: 'multiple_choice', text: '6. Which function is controlled by the cerebrum?', options: ['A. Balance', 'B. Heartbeat', 'C. Voluntary movement', 'D. Reflex actions only'], correctAnswer: 'C. Voluntary movement' },
+  { number: 7, type: 'multiple_choice', text: '7. The cerebellum is mainly responsible for:', options: ['A. Emotions', 'B. Coordination', 'C. Memory', 'D. Breathing'], correctAnswer: 'B. Coordination' },
+  { number: 8, type: 'multiple_choice', text: '8. Which part of the brain controls breathing?', options: ['A. Cerebrum', 'B. Cerebellum', 'C. Brainstem', 'D. Frontal lobe'], correctAnswer: 'C. Brainstem' },
+  { number: 9, type: 'multiple_choice', text: '9. The brainstem controls:', options: ['A. Voluntary movements only', 'B. Essential life functions', 'C. Emotions only', 'D. Memory storage'], correctAnswer: 'B. Essential life functions' },
+  { number: 10, type: 'multiple_choice', text: '10. Which of the following is an essential life function mentioned?', options: ['A. Thinking', 'B. Coordination', 'C. Heart rate', 'D. Learning'], correctAnswer: 'C. Heart rate' },
+  { number: 11, type: 'multiple_choice', text: '11. Approximately how many neurons does the human brain contain?', options: ['A. 8 billion', 'B. 60 billion', 'C. 86 billion', 'D. 100 billion'], correctAnswer: 'C. 86 billion' },
+  { number: 12, type: 'multiple_choice', text: '12. Neuroscientists study the brain to:', options: ['A. Increase intelligence', 'B. Develop new computers', 'C. Improve memory techniques', 'D. Develop treatments for neurological disorders'], correctAnswer: 'D. Develop treatments for neurological disorders' },
+  { number: 13, type: 'multiple_choice', text: '13. Which disease is mentioned in the lecture?', options: ['A. Diabetes', 'B. Alzheimer’s disease', 'C. Asthma', 'D. Cancer'], correctAnswer: 'B. Alzheimer’s disease' },
+  { number: 14, type: 'multiple_choice', text: '14. Parkinson’s disease is an example of:', options: ['A. A viral infection', 'B. A neurological disorder', 'C. A heart condition', 'D. A lung disease'], correctAnswer: 'B. A neurological disorder' },
+  { number: 15, type: 'multiple_choice', text: '15. Understanding the brain helps scientists primarily to:', options: ['A. Improve sports performance', 'B. Design robots', 'C. Cure all illnesses', 'D. Create better medical treatments'], correctAnswer: 'D. Create better medical treatments' }
+];
+
 // =========================================================================
-// 2. READING DATA (Formatted perfectly for the new `{number, type, text, options, correctAnswer}` schema)
+// 3. HARDCODED READING DATA (TESTS 1-10)
 // =========================================================================
 const getReadingCorrectAnswerStr = (optionsArray, letter) => {
   if (letter === 'A') return optionsArray[0];
@@ -162,11 +262,10 @@ const rawReadingData = [
     text: `Artificial Intelligence (AI) has rapidly transformed various industries, altering traditional models of work and productivity. From automated customer service systems to advanced data analysis tools, AI technologies are increasingly integrated into everyday business operations. While some view this transformation with optimism, others express concern about its broader implications.\n\nProponents argue that AI enhances efficiency by automating repetitive tasks, thereby allowing employees to focus on creative and strategic activities. In sectors such as finance and healthcare, AI-driven algorithms can process vast amounts of data far more quickly than human analysts. This capability reduces error rates and improves decision-making accuracy.\n\nHowever, critics warn that automation may displace workers whose roles involve routine procedures. Economists note that while new jobs may emerge in AI development and system maintenance, the transition period can create significant social and economic disruption. Workers lacking advanced technical skills may face increased vulnerability in competitive labor markets.\n\nDespite these challenges, many experts emphasize the importance of adaptability. Continuous learning and skill development are frequently cited as essential strategies for navigating technological change. Governments and educational institutions are encouraged to update training programs to align with emerging industry demands.\n\nUltimately, the impact of AI on employment depends largely on policy decisions, corporate responsibility, and the willingness of individuals to embrace lifelong learning. Rather than eliminating human contribution, AI may redefine the nature of work itself.`,
     qs: ['1. What is the main focus of the passage?', '2. How is AI described in business operations?', '3. What benefit do supporters highlight?', '4. In which sectors is AI particularly impactful?', '5. What concern do critics raise?', '6. Who may be most vulnerable to automation?', '7. What is suggested as a solution to technological disruption?', '8. What role should governments play?', '9. What does the passage suggest about new jobs?', '10. What determines the overall impact of AI?', '11. What does "automation" refer to in this context?', '12. What does "cognitive fatigue" refer to?', '13. How does AI affect decision-making?', '14. What is meant by "lifelong learning"?', '15. Which statement best summarizes the passage?'],
     opts: [['A. To promote one company', 'B. To analyze AI’s influence on employment', 'C. To criticize technology', 'D. To explain computer programming'], ['A. Rare and experimental', 'B. Widely integrated', 'C. Illegal', 'D. Temporary'], ['A. Increased unemployment', 'B. Enhanced efficiency and reduced errors', 'C. Higher taxes', 'D. Slower production'], ['A. Agriculture only', 'B. Finance and healthcare', 'C. Tourism', 'D. Fashion'], ['A. AI is too expensive', 'B. Workers may lose jobs', 'C. AI cannot function', 'D. AI reduces creativity'], ['A. CEOs', 'B. Skilled programmers', 'C. Workers in routine-based roles', 'D. Investors'], ['A. Ignoring technology', 'B. Protesting automation', 'C. Continuous learning and skill development', 'D. Reducing education'], ['A. Ban AI', 'B. Update training programs', 'C. Close industries', 'D. Increase taxes'], ['A. No new jobs will exist', 'B. Only robots will work', 'C. New technical roles may emerge', 'D. Employment will stop entirely'], ['A. Weather conditions', 'B. Public opinion only', 'C. Policies, responsibility, and adaptability', 'D. Social media'], ['A. Manual labor', 'B. Machines performing tasks automatically', 'C. Human collaboration', 'D. Paper documentation'], ['A. It increases mistakes', 'B. It slows processes', 'C. It improves accuracy', 'D. It eliminates analysis'], ['A. Emotional', 'B. Analytical and balanced', 'C. Humorous', 'D. Aggressive'], ['A. Studying once', 'B. Continuous education throughout life', 'C. Avoiding work', 'D. Early retirement'], ['A. AI will destroy all jobs', 'B. AI has no impact', 'C. AI reshapes work, bringing challenges and opportunities', 'D. Technology should stop developing']],
-    ansLetters: ['B', 'B', 'B', 'B', 'B', 'C', 'C', 'B', 'C', 'C', 'B', 'C', 'B', 'B', 'C'] // Fixed ans letter for Q12/13
+    ansLetters: ['B', 'B', 'B', 'B', 'B', 'C', 'C', 'B', 'C', 'C', 'B', 'C', 'B', 'B', 'C']
   }
 ];
 
-// Pre-build the 10 final reading objects in the NEW EXACT SCHEMA format
 const formattedReadingTests = rawReadingData.map((data, index) => {
   const formattedQs = data.qs.map((qText, qIdx) => ({
     number: qIdx + 1,
@@ -175,19 +274,11 @@ const formattedReadingTests = rawReadingData.map((data, index) => {
     options: data.opts[qIdx],
     correctAnswer: getReadingCorrectAnswerStr(data.opts[qIdx], data.ansLetters[qIdx])
   }));
-
-  return {
-    title: `Academic Reading Test ${index + 1}`,
-    sections: [{
-      title: data.title,
-      passage: data.text,
-      questions: formattedQs
-    }]
-  };
+  return { title: `Academic Reading Test ${index + 1}`, sections: [{ title: data.title, passage: data.text, questions: formattedQs }] };
 });
 
 // =========================================================================
-// 3. WRITING TESTS (EXACT PROMPT SCHEMA)
+// 4. HARDCODED WRITING & SPEAKING DATA (TESTS 1-10)
 // =========================================================================
 const writingTests = [
   { task1: { prompt: 'Instructions: You should spend about 20 minutes on this task.\n\nLine graph showing global internet usage from 2000 to 2020. Summarize the information by selecting and reporting the main features.', minWords: 150, imageUrl: 'https://quickchart.io/chart?c={type:"line",data:{labels:[2000,2005,2010,2015,2020],datasets:[{label:"Usage %",data:[10,25,45,65,85]}]}}' }, task2: { prompt: 'Instructions: You should spend about 40 minutes on this task.\n\nSome people think that remote work improves productivity, while others believe it reduces collaboration. Discuss both views and give your opinion.', minWords: 250 } },
@@ -202,9 +293,6 @@ const writingTests = [
   { task1: { prompt: 'Instructions: You should spend about 20 minutes on this task.\n\nLine graph comparing online shopping growth. Summarize the information by selecting and reporting the main features.', minWords: 150, imageUrl: 'https://quickchart.io/chart?c={type:"line",data:{labels:[2015,2016,2017,2018,2019,2020],datasets:[{label:"Online Sales",data:[20,30,45,60,80,100]}]}}' }, task2: { prompt: 'Instructions: You should spend about 40 minutes on this task.\n\nSome people believe that environmental problems are too big for individuals to solve. Others think individuals can make a difference. Discuss both views and give your opinion.', minWords: 250 } }
 ];
 
-// =========================================================================
-// 4. SPEAKING TESTS (EXACT SCHEMA)
-// =========================================================================
 const speakingTests = [
   { part1: { questions: ['Can you tell me about your hometown?', 'How has your hometown changed in recent years?', 'What kind of accommodation do you live in?', 'Do you prefer living in a house or an apartment? Why?'] }, part2: { cueCard: 'Describe a skill you learned that was difficult.\nYou should say:\n- What the skill was\n- Why you decided to learn it\n- What challenges you faced\n- And explain how you felt after learning it.' }, part3: { questions: ['Why do some people give up easily when learning new skills?', 'How important is persistence in achieving success?', 'Should schools focus more on practical skills or academic knowledge?'] } },
   { part1: { questions: ['Do you work or study?', 'Why did you choose this field?', 'What do you enjoy most about your daily routine?', 'Do you prefer working alone or in a team?'] }, part2: { cueCard: 'Describe a person who has influenced your career choices.\nYou should say:\n- Who the person is\n- How you know them\n- What influence they had\n- And explain why their influence was important.' }, part3: { questions: ['How do role models shape young people’s ambitions?', 'Is formal education necessary for career success?', 'How might career choices change in the future?'] } },
@@ -219,7 +307,7 @@ const speakingTests = [
 ];
 
 // =========================================================================
-// 🚀 DATABASE SEEDER LOGIC
+// 🚀 DATABASE SEEDER LOGIC (COMBINING OLD DYNAMIC 20 + NEW HARDCODED 10)
 // =========================================================================
 
 async function seed() {
@@ -232,10 +320,14 @@ async function seed() {
   try { await SpeakingTest.collection.drop(); } catch(e){}
 
   const listeningSources = [
-        { context: 'Library Registration', url: '/public/Librarian audio.mp3', qs: libraryQuestions },
-      { context: 'Biology Lecture', url: '/public/Lecture audio.mp3', qs: lectureQuestions },
-      { context: 'Research Meeting', url: '/public/Research project.mp3', qs: researchQuestions },
-      { context: 'Museum Tour', url: '/public/museum audio.mp3', qs: museumQuestions }
+    { context: 'Library Registration', url: '/Librarian audio.mp3', qs: libraryQuestions },
+    { context: 'Biology Lecture', url: '/Lecture audio.mp3', qs: lectureQuestions },
+    { context: 'Research Meeting', url: '/Research project.mp3', qs: researchQuestions },
+    { context: 'Museum Tour', url: '/museum audio.mp3', qs: museumQuestions },
+    { context: 'Health Clinic', url: '/health_clinic.mp3.mpeg', qs: clinicQuestions },
+    { context: 'Wildlife Park', url: '/wildlife_park.mp3.mpeg', qs: wildlifeQuestions },
+    { context: 'Gym Membership', url: '/gym_audio.mp3.mpeg', qs: gymQuestions },
+    { context: 'Community Sports Center', url: '/Community Sports Center.mp3.mpeg', qs: brainQuestions }
   ];
 
   const readingDocs = [];
@@ -243,53 +335,69 @@ async function seed() {
   const writingDocs = [];
   const speakingDocs = [];
 
-  console.log('Generating 10 FULL ACADEMIC MOCK TESTS...');
+  console.log('Generating Tests 1-10 (Hardcoded Specific Content)...');
   
   for (let i = 0; i < 10; i++) {
-    // 1. READINGS
+    // 1. READINGS (1-10)
     let rTest = JSON.parse(JSON.stringify(formattedReadingTests[i]));
     rTest.title = `Full Academic Mock Test ${i + 1}`;
     readingDocs.push(rTest);
 
-    // 2. LISTENING
-    let lSource = listeningSources[i % 4];
+    // 2. LISTENING (1-10)
+    let lSource = listeningSources[i % listeningSources.length];
     listeningDocs.push({
-      title: `Full Academic Mock Test ${i + 1}`,
+      title: `Full Academic Mock Test ${i + 1} - ${lSource.context}`,
       sections: [{ audioUrl: lSource.url, questions: lSource.qs }]
     });
 
-    // 3. WRITING
+    // 3. WRITING (1-10)
     let wTest = JSON.parse(JSON.stringify(writingTests[i]));
     wTest.title = `Full Academic Mock Test ${i + 1}`; 
     writingDocs.push(wTest);
 
-    // 4. SPEAKING
+    // 4. SPEAKING (1-10)
     let sTest = JSON.parse(JSON.stringify(speakingTests[i]));
     sTest.title = `Full Academic Mock Test ${i + 1}`;
     speakingDocs.push(sTest);
   }
 
-  console.log('Generating 20 INDIVIDUAL TARGETED PRACTICE TESTS...');
+  console.log('Generating Tests 11-30 (Dynamic Thematic Content)...');
   
-  for (let i = 11; i <= 30; i++) {
-    // Cycle through the 10 specific tests to fill out the 20 practice tests
-    let rTest = JSON.parse(JSON.stringify(formattedReadingTests[i % 10]));
-    rTest.title = `Targeted Reading Practice ${i}`;
-    readingDocs.push(rTest);
+  for (let i = 10; i < 30; i++) {
+    const topic = allTopics[i - 10]; // Cycle through the 20 old topics
     
-    let lSource = listeningSources[i % 4];
+    // 1. DYNAMIC READING
+    readingDocs.push({
+      title: `Targeted Reading Practice ${i + 1}: ${topic}`,
+      sections: [{
+        title: `Passage 1: A Deep Dive into ${topic}`,
+        passage: `<p>This comprehensive academic text investigates the fascinating domain of <b>${topic}</b>. Over the last century, scholars have thoroughly debated the foundational mechanisms of this field. Initial theories suggested that early progress was purely accidental, but recent archaeological and data-driven discoveries indicate a highly structured approach by our ancestors.</p><br/><p>As we move into the modern era, the implications of ${topic} are becoming exponentially more critical to global sustainability and scientific progress. The next decade will likely see an unprecedented surge in related funding and research, drastically changing how local governments respond to economic pressures.</p>`,
+        questions: getReadingQs(topic)
+      }]
+    });
+    
+    // 2. LISTENING
+    let lSource = listeningSources[i % listeningSources.length];
     listeningDocs.push({
-      title: `Targeted Listening Practice ${i}`,
+      title: `Targeted Listening Practice ${i + 1} - ${lSource.context}`,
       sections: [{ audioUrl: lSource.url, questions: lSource.qs }]
     });
 
-    let wTest = JSON.parse(JSON.stringify(writingTests[i % 10]));
-    wTest.title = `Targeted Writing Practice ${i}`;
-    writingDocs.push(wTest);
+    // 3. DYNAMIC WRITING
+    const chartConfig = { type: 'bar', data: { labels: ['2010', '2015', '2020'], datasets: [{ label: 'Data', data: [Math.floor(Math.random()*100), Math.floor(Math.random()*100), Math.floor(Math.random()*100)] }] }};
+    writingDocs.push({
+      title: `Targeted Writing Practice ${i + 1}: ${topic}`,
+      task1: { prompt: `Instructions: You should spend about 20 minutes on this task.\n\nThe chart below shows the changes in ${topic} across two countries between 2010 and 2020.\nSummarize the information by selecting and reporting the main features, and make comparisons where relevant.`, minWords: 150, imageUrl: `https://quickchart.io/chart?c=${encodeURIComponent(JSON.stringify(chartConfig))}&w=500&h=300` },
+      task2: { prompt: `Instructions: You should spend about 40 minutes on this task.\n\nMany people argue that issues surrounding ${topic.toLowerCase()} are the most urgent of our time. To what extent do you agree?\n\nGive reasons for your answer and include relevant examples.`, minWords: 250 }
+    });
 
-    let sTest = JSON.parse(JSON.stringify(speakingTests[i % 10]));
-    sTest.title = `Targeted Speaking Practice ${i}`;
-    speakingDocs.push(sTest);
+    // 4. DYNAMIC SPEAKING
+    speakingDocs.push({
+      title: `Targeted Speaking Practice ${i + 1}: ${topic}`,
+      part1: { questions: [`Let's talk about ${topic}.`, `Do you generally enjoy learning about ${topic}?`, `How has your view on ${topic} changed recently?`] },
+      part2: { cueCard: `Describe a memorable experience you had relating to ${topic}.\n\nYou should say:\n- What happened\n- When and where it happened\n- Who you were with\n\nAnd explain why it was memorable.` },
+      part3: { questions: [`What is the broader impact of ${topic} on society today?`, `How do you think ${topic} will evolve in 50 years?`] }
+    });
   }
 
   // Insert all to DB
@@ -298,9 +406,9 @@ async function seed() {
   await WritingTest.insertMany(writingDocs);
   await SpeakingTest.insertMany(speakingDocs);
 
-  console.log('✅ Seed complete!');
-  console.log('✅ 10 Full Mock Tests and 20 Individual Tests are now in your Database.');
-  console.log('✅ Database format is exactly aligned with your updated React schema.');
+  console.log('✅ Seed complete! ALL 30 TESTS HAVE BEEN GENERATED!');
+  console.log('✅ Tests 1-10: Hardcoded Specific Content.');
+  console.log('✅ Tests 11-30: Dynamic Content based on 20 Topics.');
   await mongoose.disconnect();
 }
 

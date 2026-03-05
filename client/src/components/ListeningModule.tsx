@@ -17,6 +17,10 @@ const ListeningModule: React.FC<ListeningModuleProps> = ({ testId, onComplete, o
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [isPlaying, setIsPlaying] = useState(false);
   const audioRef = useRef<HTMLAudioElement>(null);
+  
+  // States for showing results
+  const [submitted, setSubmitted] = useState(false);
+  const [finalScore, setFinalScore] = useState(0);
 
   useEffect(() => {
     let isMounted = true;
@@ -54,11 +58,27 @@ const ListeningModule: React.FC<ListeningModuleProps> = ({ testId, onComplete, o
 
     test.sections.forEach((section: any) => {
       section.questions.forEach((q: any) => {
-        const userAnswer = (answers[q._id] || '').trim().toLowerCase();
+        // Use q.number as the key to perfectly match the DetailedReview component
+        const storedAnswer = answers[q.number] || '';
+        const userAnswer = storedAnswer.trim().toLowerCase();
+        
         finalAnswers.push(userAnswer);
-        if (userAnswer === q.correctAnswer?.trim().toLowerCase()) score++;
+        
+        // Ensure correctAnswer exists and compare safely
+        if (q.correctAnswer && userAnswer === q.correctAnswer.trim().toLowerCase()) {
+            score++;
+        }
       });
     });
+
+    setFinalScore(score);
+    setSubmitted(true);
+    
+    // Stop audio when test is submitted
+    if (audioRef.current && isPlaying) {
+      audioRef.current.pause();
+      setIsPlaying(false);
+    }
 
     onComplete({ score, answers: finalAnswers, timeSpent: 1800 });
   };
@@ -66,10 +86,41 @@ const ListeningModule: React.FC<ListeningModuleProps> = ({ testId, onComplete, o
   if (loading) return <div className="flex justify-center py-20"><Loader className="animate-spin text-indigo-600" size={40} /></div>;
   if (error || !test) return <div className="text-center text-red-600 py-20"><AlertCircle size={48} className="mx-auto mb-4" /><p>{error}</p></div>;
 
+  // --- RESULTS VIEW ---
+  if (submitted) {
+    return (
+      <div className="max-w-7xl mx-auto px-4 py-8">
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 text-center mb-8">
+          <h2 className="text-3xl font-bold text-gray-900 mb-4">Listening Test Complete</h2>
+          <div className="text-6xl font-bold text-blue-600 mb-4">
+            {finalScore} <span className="text-2xl text-gray-500">/ {test.sections.reduce((acc: number, sec: any) => acc + sec.questions.length, 0)}</span>
+          </div>
+          <p className="text-gray-600 mb-8">
+            You have completed the listening test. Review your answers below.
+          </p>
+          <button
+            onClick={() => window.location.href = '/'} // Redirects to home/dashboard
+            className="bg-blue-600 text-white px-8 py-3 rounded-lg font-bold hover:bg-blue-700 transition-colors"
+          >
+            Return to Dashboard
+          </button>
+        </div>
+
+        {/* Detailed Review Component */}
+        <DetailedReview 
+          sections={test.sections} 
+          userAnswers={answers} 
+        />
+      </div>
+    );
+  }
+
+  // --- ACTIVE TEST VIEW ---
   const section = test.sections[0];
   
-  // Clean, dynamic URL pointing to your newly fixed backend static folder
-  const audioUrl = section.audioUrl.startsWith('http') ? section.audioUrl : `http://localhost:5000${section.audioUrl}`;
+  // FIX: Force React to fetch the audio from the backend server running on port 5000
+  const rawAudioUrl = section?.audioUrl || test.audioUrl;
+  const audioUrl = rawAudioUrl.startsWith('http') ? rawAudioUrl : `http://localhost:5000${rawAudioUrl}`;
 
   return (
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="max-w-5xl mx-auto p-6">
@@ -112,10 +163,10 @@ const ListeningModule: React.FC<ListeningModuleProps> = ({ testId, onComplete, o
         </div>
 
         <div className="p-8 bg-white h-[55vh] overflow-y-auto">
-          <h3 className="text-lg font-bold mb-6 text-slate-800 border-b pb-2">Questions 1 - 15</h3>
+          <h3 className="text-lg font-bold mb-6 text-slate-800 border-b pb-2">Questions</h3>
           <div className="space-y-8">
             {section.questions.map((q: any, idx: number) => (
-              <div key={q._id || idx} className="p-6 bg-slate-50 rounded-2xl border border-slate-200 shadow-sm hover:border-indigo-300 transition-colors">
+              <div key={q.number || idx} className="p-6 bg-slate-50 rounded-2xl border border-slate-200 shadow-sm hover:border-indigo-300 transition-colors">
                 <p className="font-semibold text-slate-800 mb-5 text-lg">
                   <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-indigo-100 text-indigo-700 font-bold mr-3 text-sm">
                     {q.number}
@@ -129,10 +180,11 @@ const ListeningModule: React.FC<ListeningModuleProps> = ({ testId, onComplete, o
                       <label key={i} className="flex items-center gap-3 cursor-pointer group bg-white p-3 rounded-xl border border-slate-200 hover:bg-indigo-50 transition-colors">
                         <input 
                           type="radio" 
-                          name={`q_${idx}`} 
+                          name={`q_${q.number}`} 
                           value={opt} 
-                          checked={answers[q._id] === opt} 
-                          onChange={(e) => setAnswers({...answers, [q._id]: e.target.value})} 
+                          // Saving via q.number to ensure DetailedReview matches it exactly
+                          checked={answers[q.number] === opt} 
+                          onChange={(e) => setAnswers({...answers, [q.number]: e.target.value})} 
                           className="w-5 h-5 text-indigo-600 focus:ring-indigo-500" 
                         />
                         <span className="text-slate-700 group-hover:text-indigo-900 font-medium">{opt}</span>
@@ -143,8 +195,8 @@ const ListeningModule: React.FC<ListeningModuleProps> = ({ testId, onComplete, o
                   <div className="ml-11">
                     <input 
                       type="text" 
-                      value={answers[q._id] || ''} 
-                      onChange={(e) => setAnswers({...answers, [q._id]: e.target.value})} 
+                      value={answers[q.number] || ''} 
+                      onChange={(e) => setAnswers({...answers, [q.number]: e.target.value})} 
                       placeholder="Type your exact answer..." 
                       className="w-full md:w-1/2 px-4 py-3 border-2 border-slate-200 rounded-xl focus:ring-4 focus:ring-indigo-100 focus:border-indigo-500 transition-all font-medium text-slate-700" 
                     />

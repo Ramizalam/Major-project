@@ -188,7 +188,7 @@ const SpeakingModule: React.FC<SpeakingModuleProps> = ({ testId, onComplete }) =
     return (
       <div className="min-h-[70vh] flex flex-col items-center justify-center text-center p-8">
         <Loader size={64} className="animate-spin text-emerald-500 mb-6" />
-        <h2 className="text-3xl font-black text-slate-800 mb-4">We are  Evaluating Your Speech...</h2>
+        <h2 className="text-3xl font-black text-slate-800 mb-4">AI is Evaluating Your Speech...</h2>
       </div>
     );
   }
@@ -210,7 +210,7 @@ const SpeakingModule: React.FC<SpeakingModuleProps> = ({ testId, onComplete }) =
             <ShieldAlert size={64} className="text-emerald-500 mb-6" />
             <h2 className="text-3xl font-black text-white mb-4">Interview Setup</h2>
             <p className="text-slate-400 text-lg max-w-xl mb-8 leading-relaxed">
-              The  Examiner will speak out loud. <b>You cannot record while the Examiner is speaking.</b> Grant microphone permissions when prompted.
+              The AI Examiner will speak out loud. <b>You cannot record while the Examiner is speaking.</b> Grant microphone permissions when prompted.
             </p>
             <button onClick={startInterview} className="px-12 py-4 bg-emerald-600 hover:bg-emerald-500 text-white rounded-full font-bold text-xl transition-all">
               Enter Interview Room
