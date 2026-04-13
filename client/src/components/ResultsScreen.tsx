@@ -1,6 +1,7 @@
-import React from 'react';
-import { Award, TrendingUp, BookOpen, Target } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import { Award, TrendingUp, BookOpen, Target, Save, CheckCircle } from 'lucide-react';
 import { TestResults } from '../App';
+import axios from 'axios';
 
 interface ResultsScreenProps {
   results: TestResults;
@@ -8,34 +9,64 @@ interface ResultsScreenProps {
 }
 
 const ResultsScreen: React.FC<ResultsScreenProps> = ({ results, onReset }) => {
+  const [saveStatus, setSaveStatus] = useState<'saving' | 'saved' | 'error'>('saving');
+  const hasSaved = useRef(false);
+
   const calculateOverallBand = () => {
     let totalScore = 0;
     let sectionCount = 0;
 
-    if (results.listening) {
-      totalScore += results.listening.score;
-      sectionCount++;
-    }
-    if (results.reading) {
-      totalScore += results.reading.score;
-      sectionCount++;
-    }
-    if (results.writing) {
-      totalScore += ((results.writing.task1Score || 0) + (results.writing.task2Score || 0)) / 2;
-      sectionCount++;
-    }
-    if (results.speaking) {
-      totalScore += ((results.speaking.part1Score || 0) + (results.speaking.part2Score || 0) + (results.speaking.part3Score || 0)) / 3;
-      sectionCount++;
-    }
+    if (results.listening) { totalScore += results.listening.score; sectionCount++; }
+    if (results.reading) { totalScore += results.reading.score; sectionCount++; }
+    if (results.writing) { totalScore += ((results.writing.task1Score || 0) + (results.writing.task2Score || 0)) / 2; sectionCount++; }
+    if (results.speaking) { totalScore += ((results.speaking.part1Score || 0) + (results.speaking.part2Score || 0) + (results.speaking.part3Score || 0)) / 3; sectionCount++; }
 
     if (sectionCount === 0) return 0;
-
     const average = totalScore / sectionCount;
-    return Math.round(average * 2) / 2; // Round to nearest 0.5
+    return Math.round(average * 2) / 2; 
   };
 
   const overallBand = calculateOverallBand();
+
+  // THE NEW AUTO-SAVE LOGIC
+  useEffect(() => {
+    const saveToDashboard = async () => {
+      // Prevent double-saving due to React Strict Mode
+      if (hasSaved.current) return;
+      hasSaved.current = true;
+
+      try {
+        const token = localStorage.getItem('token');
+        if (!token) {
+          setSaveStatus('error');
+          return;
+        }
+
+        // Determine which module was taken to tag it on the graph
+        let activeModule = 'full';
+        let activeTestId = 'full_1';
+        if (results.listening && !results.reading) { activeModule = 'listening'; activeTestId = 'listening_1'; }
+        if (results.reading && !results.listening) { activeModule = 'reading'; activeTestId = 'reading_1'; }
+        if (results.writing && !results.reading) { activeModule = 'writing'; activeTestId = 'writing_1'; }
+        if (results.speaking && !results.reading) { activeModule = 'speaking'; activeTestId = 'speaking_1'; }
+
+        await axios.post('http://localhost:5000/api/analytics/save', {
+          score: overallBand,
+          module: activeModule,
+          testId: activeTestId
+        }, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+
+        setSaveStatus('saved');
+      } catch (error) {
+        console.error('Failed to save scores:', error);
+        setSaveStatus('error');
+      }
+    };
+
+    saveToDashboard();
+  }, [overallBand, results]);
 
   const getBandColor = (band: number) => {
     if (band >= 8.5) return 'text-green-600 bg-green-50 border-green-200';
@@ -60,104 +91,31 @@ const ResultsScreen: React.FC<ResultsScreenProps> = ({ results, onReset }) => {
       { skill: 'Writing', score: ((results.writing?.task1Score || 0) + (results.writing?.task2Score || 0)) / 2 },
       { skill: 'Speaking', score: ((results.speaking?.part1Score || 0) + (results.speaking?.part2Score || 0) + (results.speaking?.part3Score || 0)) / 3 }
     ];
-
-    // Filter out sections that weren't taken (score 0 might be valid, but for study plan we prioritize taken sections)
-    // Actually, if score is 0 it might mean not taken OR failed. 
-    // But given the context, we can just sort.
-
     scores.sort((a, b) => a.score - b.score);
     return scores.slice(0, 2).map(skill => skill.skill);
   };
 
   const studyRecommendations = generateStudyPlan();
 
-  // Extract strengths and improvements from feedback
   const extractStrengths = () => {
     const strengths: string[] = [];
-
-    // From Writing feedback
-    if (results.writing?.feedback?.task1?.strengths) {
-      strengths.push(...results.writing.feedback.task1.strengths.slice(0, 1));
-    }
-    if (results.writing?.feedback?.task2?.strengths) {
-      strengths.push(...results.writing.feedback.task2.strengths.slice(0, 1));
-    }
-
-    // From Speaking evaluation
-    if (results.speaking?.evaluation?.overallBand) {
-      const band = results.speaking.evaluation.overallBand;
-      if (band >= 7.0) {
-        strengths.push('Strong speaking fluency and coherence');
-      }
-      if (results.speaking.evaluation.vocabulary >= 7.0) {
-        strengths.push('Excellent vocabulary range');
-      }
-      if (results.speaking.evaluation.grammar >= 7.0) {
-        strengths.push('Accurate grammatical structures');
-      }
-    }
-
-    // Listening & Reading scores
-    if (results.listening?.score && results.listening.score >= 7.0) {
-      strengths.push('Strong listening comprehension skills');
-    }
-    if (results.reading?.score && results.reading.score >= 7.0) {
-      strengths.push('Excellent reading and analytical abilities');
-    }
-    if (results.writing && (results.writing.task1Score + results.writing.task2Score) / 2 >= 7.0) {
-      strengths.push('Well-structured written communication');
-    }
-
+    if (results.writing?.feedback?.task1?.strengths) strengths.push(...results.writing.feedback.task1.strengths.slice(0, 1));
+    if (results.writing?.feedback?.task2?.strengths) strengths.push(...results.writing.feedback.task2.strengths.slice(0, 1));
+    if (results.speaking?.evaluation?.overallBand && results.speaking.evaluation.overallBand >= 7.0) strengths.push('Strong speaking fluency and coherence');
+    if (results.listening?.score && results.listening.score >= 7.0) strengths.push('Strong listening comprehension skills');
+    if (results.reading?.score && results.reading.score >= 7.0) strengths.push('Excellent reading and analytical abilities');
     strengths.push('Completed all sections within time limits');
-    return strengths.slice(0, 5); // Limit to 5 items
+    return strengths.slice(0, 5); 
   };
 
   const extractAreasForImprovement = () => {
     const areas: string[] = [];
-
-    // From Writing feedback
-    if (results.writing?.feedback?.task1?.areasForImprovement) {
-      areas.push(...results.writing.feedback.task1.areasForImprovement.slice(0, 1));
-    }
-    if (results.writing?.feedback?.task2?.areasForImprovement) {
-      areas.push(...results.writing.feedback.task2.areasForImprovement.slice(0, 1));
-    }
-
-    // From Speaking evaluation
-    if (results.speaking?.evaluation) {
-      const { fluency, vocabulary, grammar, pronunciation } = results.speaking.evaluation;
-      if (fluency && fluency < 7.0) {
-        areas.push('Work on reducing hesitations and filler words');
-      }
-      if (vocabulary && vocabulary < 7.0) {
-        areas.push('Expand vocabulary with more advanced terms');
-      }
-      if (grammar && grammar < 7.0) {
-        areas.push('Practice more complex grammatical structures');
-      }
-      if (pronunciation && pronunciation < 7.0) {
-        areas.push('Focus on clearer pronunciation and intonation');
-      }
-      if (results.speaking.evaluation.fillerWordsFound > 5) {
-        areas.push(`Reduce filler words (${results.speaking.evaluation.fillerWordsFound} detected)`);
-      }
-    }
-
-    // Skill-based recommendations
-    if (studyRecommendations.includes('Listening') && results.listening) {
-      areas.push('Focus on understanding different accents and speech patterns');
-    }
-    if (studyRecommendations.includes('Reading') && results.reading) {
-      areas.push('Practice skimming and scanning techniques');
-    }
-    if (studyRecommendations.includes('Writing') && results.writing && !areas.some(a => a.includes('essay structure'))) {
-      areas.push('Work on essay structure and vocabulary range');
-    }
-    if (studyRecommendations.includes('Speaking') && results.speaking && !areas.some(a => a.includes('fluency'))) {
-      areas.push('Practice fluency and pronunciation');
-    }
-
-    return areas.slice(0, 5); // Limit to 5 items
+    if (results.writing?.feedback?.task1?.areasForImprovement) areas.push(...results.writing.feedback.task1.areasForImprovement.slice(0, 1));
+    if (results.writing?.feedback?.task2?.areasForImprovement) areas.push(...results.writing.feedback.task2.areasForImprovement.slice(0, 1));
+    if (results.speaking?.evaluation?.fluency && results.speaking.evaluation.fluency < 7.0) areas.push('Work on reducing hesitations and filler words');
+    if (studyRecommendations.includes('Listening') && results.listening) areas.push('Focus on understanding different accents and speech patterns');
+    if (studyRecommendations.includes('Reading') && results.reading) areas.push('Practice skimming and scanning techniques');
+    return areas.slice(0, 5); 
   };
 
   const strengths = extractStrengths();
@@ -166,6 +124,14 @@ const ResultsScreen: React.FC<ResultsScreenProps> = ({ results, onReset }) => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 py-8">
       <div className="max-w-6xl mx-auto px-6">
+        
+        {/* Save Status Banner */}
+        <div className="flex justify-center mb-6">
+          {saveStatus === 'saving' && <div className="flex items-center gap-2 bg-blue-100 text-blue-700 px-4 py-2 rounded-full font-medium shadow-sm"><Save className="w-4 h-4 animate-pulse" /> Saving to Dashboard...</div>}
+          {saveStatus === 'saved' && <div className="flex items-center gap-2 bg-green-100 text-green-700 px-4 py-2 rounded-full font-medium shadow-sm"><CheckCircle className="w-4 h-4" /> Scores Saved to Dashboard</div>}
+          {saveStatus === 'error' && <div className="flex items-center gap-2 bg-red-100 text-red-700 px-4 py-2 rounded-full font-medium shadow-sm">Failed to save scores.</div>}
+        </div>
+
         {/* Header */}
         <div className="text-center mb-8">
           <Award className="w-16 h-16 text-yellow-500 mx-auto mb-4" />
@@ -174,9 +140,9 @@ const ResultsScreen: React.FC<ResultsScreenProps> = ({ results, onReset }) => {
         </div>
 
         {/* Overall Score */}
-        <div className="bg-white rounded-2xl shadow-xl p-8 mb-8 text-center">
+        <div className="bg-white rounded-2xl shadow-xl p-8 mb-8 text-center border-t-4 border-indigo-500">
           <h2 className="text-2xl font-bold text-gray-800 mb-4">Overall Band Score</h2>
-          <div className={`inline-flex items-center justify-center w-32 h-32 rounded-full border-4 ${getBandColor(overallBand)} mb-4`}>
+          <div className={`inline-flex items-center justify-center w-32 h-32 rounded-full border-4 shadow-inner ${getBandColor(overallBand)} mb-4`}>
             <span className="text-4xl font-bold">{overallBand}</span>
           </div>
           <p className="text-xl font-semibold text-gray-700">{getBandDescription(overallBand)}</p>
@@ -185,128 +151,75 @@ const ResultsScreen: React.FC<ResultsScreenProps> = ({ results, onReset }) => {
         {/* Individual Scores */}
         <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
           {/* Listening */}
-          <div className={`bg-white rounded-lg shadow-md p-6 ${!results.listening ? 'opacity-50' : ''}`}>
+          <div className={`bg-white rounded-xl shadow-md p-6 ${!results.listening ? 'opacity-50' : 'border-b-4 border-purple-500'}`}>
             <div className="flex items-center justify-between mb-4">
-              <h3 className="font-semibold text-gray-800">Listening</h3>
+              <h3 className="font-bold text-gray-800">Listening</h3>
               {results.listening ? (
-                <div className={`px-3 py-1 rounded-full text-sm font-bold border ${getBandColor(results.listening.score)}`}>
-                  {results.listening.score}
-                </div>
-              ) : (
-                <span className="text-gray-400 text-sm">Not taken</span>
-              )}
+                <div className={`px-3 py-1 rounded-full text-sm font-bold border ${getBandColor(results.listening.score)}`}>{results.listening.score}</div>
+              ) : (<span className="text-gray-400 text-sm">Not taken</span>)}
             </div>
             {results.listening && (
-              <div className="text-sm text-gray-600">
-                <p>Raw Score: {results.listening.answers.filter((ans, idx) => {
-                  const correctAnswers = [
-                    'library', '9:30', 'thompson', '07789 123456', 'student discount', 'monday', 'beginner', 'swimming', '25', 'reception',
-                    'A', 'B', 'C', 'A', 'B', 'museum', 'guided tour', 'photography', 'café', 'gift shop',
-                    'research methods', 'data collection', 'analysis', 'presentation', 'peer review', 'C', 'A', 'B', 'A', 'C',
-                    'climate change', 'global warming', 'renewable energy', 'sustainability', 'carbon footprint', 'fossil fuels', 'solar power', 'wind energy', 'hydroelectric', 'environmental impact'
-                  ];
-                  return ans.toString().toLowerCase() === correctAnswers[idx].toString().toLowerCase();
-                }).length}/40</p>
+              <div className="text-sm text-gray-600 font-medium">
+                <p>Correct Answers: {results.listening.score}/15</p>
                 <p>Time: {Math.floor(results.listening.timeSpent / 60)} min</p>
               </div>
             )}
           </div>
 
           {/* Reading */}
-          <div className={`bg-white rounded-lg shadow-md p-6 ${!results.reading ? 'opacity-50' : ''}`}>
+          <div className={`bg-white rounded-xl shadow-md p-6 ${!results.reading ? 'opacity-50' : 'border-b-4 border-blue-500'}`}>
             <div className="flex items-center justify-between mb-4">
-              <h3 className="font-semibold text-gray-800">Reading</h3>
+              <h3 className="font-bold text-gray-800">Reading</h3>
               {results.reading ? (
-                <div className={`px-3 py-1 rounded-full text-sm font-bold border ${getBandColor(results.reading.score)}`}>
-                  {results.reading.score}
-                </div>
-              ) : (
-                <span className="text-gray-400 text-sm">Not taken</span>
-              )}
+                <div className={`px-3 py-1 rounded-full text-sm font-bold border ${getBandColor(results.reading.score)}`}>{results.reading.score}</div>
+              ) : (<span className="text-gray-400 text-sm">Not taken</span>)}
             </div>
             {results.reading && (
-              <div className="text-sm text-gray-600">
-                <p>Raw Score: {results.reading.answers.filter((ans, idx) => {
-                  const correctAnswers = [
-                    'B', 'A', 'C', 'B', 'A', 'TRUE', 'FALSE', 'NOT GIVEN', 'TRUE', 'FALSE', 'education', 'technology', 'communication',
-                    'iv', 'vii', 'ii', 'i', 'vi', 'C', 'A', 'B', 'D', 'innovation', 'research', 'development', 'market',
-                    'YES', 'NO', 'NOT GIVEN', 'YES', 'NO', 'D', 'B', 'A', 'C', 'B', 'sustainability', 'environment', 'future', 'challenges'
-                  ];
-                  return ans.toString().toLowerCase() === correctAnswers[idx].toString().toLowerCase();
-                }).length}/40</p>
+              <div className="text-sm text-gray-600 font-medium">
+                <p>Correct Answers: {results.reading.score}/15</p>
                 <p>Time: {Math.floor(results.reading.timeSpent / 60)} min</p>
               </div>
             )}
           </div>
 
           {/* Writing */}
-          <div className={`bg-white rounded-lg shadow-md p-6 ${!results.writing ? 'opacity-50' : ''}`}>
+          <div className={`bg-white rounded-xl shadow-md p-6 ${!results.writing ? 'opacity-50' : 'border-b-4 border-pink-500'}`}>
             <div className="flex items-center justify-between mb-4">
-              <h3 className="font-semibold text-gray-800">Writing</h3>
+              <h3 className="font-bold text-gray-800">Writing</h3>
               {results.writing ? (
                 <div className={`px-3 py-1 rounded-full text-sm font-bold border ${getBandColor(((results.writing.task1Score || 0) + (results.writing.task2Score || 0)) / 2)}`}>
                   {Math.round(((results.writing.task1Score || 0) + (results.writing.task2Score || 0)) / 2 * 2) / 2}
                 </div>
-              ) : (
-                <span className="text-gray-400 text-sm">Not taken</span>
-              )}
+              ) : (<span className="text-gray-400 text-sm">Not taken</span>)}
             </div>
             {results.writing && (
               <div className="text-sm text-gray-600">
-                <p>Task 1: {results.writing.task1Score || 0}</p>
-                <p>Task 2: {results.writing.task2Score || 0}</p>
-                <p>Time: {Math.floor(results.writing.timeSpent / 60)} min</p>
+                <p className="font-medium">Task 1: Band {results.writing.task1Score || 0}</p>
+                <p className="font-medium">Task 2: Band {results.writing.task2Score || 0}</p>
                 {results.writing.feedback && (
-                  <div className="mt-3 text-sm text-gray-700">
-                    <h5 className="font-semibold">Writing Feedback</h5>
-                    {results.writing.feedback.task1 && (
-                      <div className="mt-2">
-                        <strong>Task 1:</strong>
-                        <p>{typeof results.writing.feedback.task1.overallBand === 'number' ? `Band ${results.writing.feedback.task1.overallBand}` : ''}</p>
-                        <p className="text-sm text-gray-600">{results.writing.feedback.task1.areasForImprovement?.slice(0, 2).join(', ')}</p>
-                      </div>
-                    )}
-                    {results.writing.feedback.task2 && (
-                      <div className="mt-2">
-                        <strong>Task 2:</strong>
-                        <p>{typeof results.writing.feedback.task2.overallBand === 'number' ? `Band ${results.writing.feedback.task2.overallBand}` : ''}</p>
-                        <p className="text-sm text-gray-600">{results.writing.feedback.task2.areasForImprovement?.slice(0, 2).join(', ')}</p>
-                      </div>
-                    )}
-                  </div>
+                  <div className="mt-3 pt-3 border-t text-xs text-gray-500">AI Feedback Generated Successfully</div>
                 )}
               </div>
             )}
           </div>
 
           {/* Speaking */}
-          <div className={`bg-white rounded-lg shadow-md p-6 ${!results.speaking ? 'opacity-50' : ''}`}>
+          <div className={`bg-white rounded-xl shadow-md p-6 ${!results.speaking ? 'opacity-50' : 'border-b-4 border-emerald-500'}`}>
             <div className="flex items-center justify-between mb-4">
-              <h3 className="font-semibold text-gray-800">Speaking</h3>
+              <h3 className="font-bold text-gray-800">Speaking</h3>
               {results.speaking ? (
                 <div className={`px-3 py-1 rounded-full text-sm font-bold border ${getBandColor(((results.speaking.part1Score || 0) + (results.speaking.part2Score || 0) + (results.speaking.part3Score || 0)) / 3)}`}>
                   {Math.round(((results.speaking.part1Score || 0) + (results.speaking.part2Score || 0) + (results.speaking.part3Score || 0)) / 3 * 2) / 2}
                 </div>
-              ) : (
-                <span className="text-gray-400 text-sm">Not taken</span>
-              )}
+              ) : (<span className="text-gray-400 text-sm">Not taken</span>)}
             </div>
             {results.speaking && (
               <div className="text-sm text-gray-600">
-                <p>Part 1: {results.speaking.part1Score || 0}</p>
-                <p>Part 2: {results.speaking.part2Score || 0}</p>
-                <p>Part 3: {results.speaking.part3Score || 0}</p>
                 {results.speaking.evaluation && (
-                  <div className="mt-3 text-sm text-gray-700">
-                    <h5 className="font-semibold">Speaking Feedback</h5>
-                    <p>Overall Band: {results.speaking.evaluation.overallBand?.toFixed(1) || 'N/A'}</p>
+                  <div className="mt-2 space-y-1 font-medium">
                     <p>Fluency: {results.speaking.evaluation.fluency?.toFixed(1) || 'N/A'}</p>
                     <p>Lexical: {results.speaking.evaluation.vocabulary?.toFixed(1) || 'N/A'}</p>
                     <p>Grammar: {results.speaking.evaluation.grammar?.toFixed(1) || 'N/A'}</p>
-                    <p>Pronunciation: {results.speaking.evaluation.pronunciation?.toFixed(1) || 'N/A'}</p>
-                    {results.speaking.evaluation.fillerWordsFound > 0 && (
-                      <p>Filler words detected: {results.speaking.evaluation.fillerWordsFound}</p>
-                    )}
                   </div>
                 )}
               </div>
@@ -316,158 +229,76 @@ const ResultsScreen: React.FC<ResultsScreenProps> = ({ results, onReset }) => {
 
         {/* Detailed Feedback */}
         <div className="grid lg:grid-cols-2 gap-8 mb-8">
-          <div className="bg-white rounded-lg shadow-md p-6">
-            <h3 className="text-xl font-bold text-gray-800 mb-4 flex items-center">
-              <TrendingUp className="w-5 h-5 mr-2" />
-              Performance Analysis
+          <div className="bg-white rounded-2xl shadow-md p-8">
+            <h3 className="text-xl font-bold text-gray-800 mb-6 flex items-center">
+              <TrendingUp className="w-6 h-6 mr-3 text-indigo-500" />
+              AI Performance Analysis
             </h3>
 
-            <div className="space-y-4">
+            <div className="space-y-6">
               <div>
-                <h4 className="font-semibold text-green-700 mb-2">Strengths</h4>
-                <ul className="text-sm text-gray-600 space-y-1">
+                <h4 className="font-bold text-green-600 mb-3 bg-green-50 px-4 py-2 rounded-lg">Top Strengths</h4>
+                <ul className="text-sm text-gray-700 space-y-2 px-4">
                   {strengths.length > 0 ? (
-                    strengths.map((strength, idx) => (
-                      <li key={idx}>• {strength}</li>
-                    ))
-                  ) : (
-                    <li>• Good attempt across all sections</li>
-                  )}
+                    strengths.map((strength, idx) => (<li key={idx} className="flex items-start gap-2"><span className="text-green-500 font-bold">•</span> {strength}</li>))
+                  ) : (<li>Good attempt across all sections</li>)}
                 </ul>
               </div>
 
               <div>
-                <h4 className="font-semibold text-orange-700 mb-2">Areas for Improvement</h4>
-                <ul className="text-sm text-gray-600 space-y-1">
+                <h4 className="font-bold text-orange-600 mb-3 bg-orange-50 px-4 py-2 rounded-lg">Areas for Improvement</h4>
+                <ul className="text-sm text-gray-700 space-y-2 px-4">
                   {areasForImprovement.length > 0 ? (
-                    areasForImprovement.map((area, idx) => (
-                      <li key={idx}>• {area}</li>
-                    ))
-                  ) : (
-                    <li>• Continue regular practice to maintain performance</li>
-                  )}
+                    areasForImprovement.map((area, idx) => (<li key={idx} className="flex items-start gap-2"><span className="text-orange-500 font-bold">•</span> {area}</li>))
+                  ) : (<li>Continue regular practice to maintain performance</li>)}
                 </ul>
               </div>
             </div>
           </div>
 
-          <div className="bg-white rounded-lg shadow-md p-6">
-            <h3 className="text-xl font-bold text-gray-800 mb-4 flex items-center">
-              <Target className="w-5 h-5 mr-2" />
+          <div className="bg-white rounded-2xl shadow-md p-8">
+            <h3 className="text-xl font-bold text-gray-800 mb-6 flex items-center">
+              <Target className="w-6 h-6 mr-3 text-indigo-500" />
               Personalized Study Plan
             </h3>
 
-            <div className="space-y-4">
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                <h4 className="font-semibold text-blue-800 mb-2">Priority Focus Areas</h4>
-                <p className="text-blue-700 text-sm">
-                  Based on your results, focus on: <strong>{studyRecommendations.join(' and ')}</strong>
+            <div className="space-y-5">
+              <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-5">
+                <h4 className="font-bold text-indigo-900 mb-2">Priority Focus Areas</h4>
+                <p className="text-indigo-700 text-sm font-medium">
+                  Based on your AI evaluation, focus heavily on: <strong>{studyRecommendations.join(' and ')}</strong>
                 </p>
               </div>
 
               <div>
-                <h4 className="font-semibold text-gray-800 mb-3">Key Recommendations from Feedback</h4>
-                <div className="space-y-2 text-sm text-gray-600">
+                <h4 className="font-bold text-gray-800 mb-3">AI Recommendations</h4>
+                <div className="space-y-3 text-sm text-gray-600">
                   {results.writing?.feedback?.task1?.recommendations && (
-                    <div className="p-2 bg-purple-50 rounded">
-                      <p className="font-medium text-purple-700">Writing Task 1:</p>
+                    <div className="p-3 bg-pink-50 border border-pink-100 rounded-lg">
+                      <p className="font-bold text-pink-700 mb-1">Writing:</p>
                       <p>{results.writing.feedback.task1.recommendations[0]}</p>
                     </div>
                   )}
-                  {results.writing?.feedback?.task2?.recommendations && (
-                    <div className="p-2 bg-purple-50 rounded">
-                      <p className="font-medium text-purple-700">Writing Task 2:</p>
-                      <p>{results.writing.feedback.task2.recommendations[0]}</p>
-                    </div>
-                  )}
                   {results.speaking?.evaluation?.recommendations && (
-                    <div className="p-2 bg-blue-50 rounded">
-                      <p className="font-medium text-blue-700">Speaking:</p>
+                    <div className="p-3 bg-emerald-50 border border-emerald-100 rounded-lg">
+                      <p className="font-bold text-emerald-700 mb-1">Speaking:</p>
                       <p>{results.speaking.evaluation.recommendations[0]}</p>
                     </div>
                   )}
                 </div>
               </div>
-
-              <div>
-                <h4 className="font-semibold text-gray-800 mb-3">Recommended Study Schedule (4 weeks)</h4>
-                <div className="space-y-3 text-sm">
-                  <div className="flex justify-between p-2 bg-gray-50 rounded">
-                    <span>Week 1-2:</span>
-                    <span>Focus on weakest skills (2-3 hours/day)</span>
-                  </div>
-                  <div className="flex justify-between p-2 bg-gray-50 rounded">
-                    <span>Week 3:</span>
-                    <span>Full practice tests (3 tests)</span>
-                  </div>
-                  <div className="flex justify-between p-2 bg-gray-50 rounded">
-                    <span>Week 4:</span>
-                    <span>Review and final preparations</span>
-                  </div>
-                </div>
-              </div>
-
-              <div>
-                <h4 className="font-semibold text-gray-800 mb-2">Specific Recommendations</h4>
-                <ul className="text-sm text-gray-600 space-y-1">
-                  <li>• Take at least 2 more practice tests</li>
-                  <li>• Focus daily practice on lowest-scoring sections</li>
-                  <li>• Record yourself speaking for pronunciation practice</li>
-                  <li>• Read academic texts for 30 minutes daily</li>
-                  <li>• Practice writing essays within time limits</li>
-                </ul>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* University/Immigration Requirements */}
-        <div className="bg-white rounded-lg shadow-md p-6 mb-8">
-          <h3 className="text-xl font-bold text-gray-800 mb-4 flex items-center">
-            <BookOpen className="w-5 h-5 mr-2" />
-            Score Requirements Reference
-          </h3>
-
-          <div className="grid md:grid-cols-3 gap-6">
-            <div>
-              <h4 className="font-semibold text-green-700 mb-2">University Admission</h4>
-              <ul className="text-sm space-y-1">
-                <li>• Top universities: 7.5-8.5+</li>
-                <li>• Good universities: 6.5-7.0</li>
-                <li>• Foundation/Pathway: 5.5-6.0</li>
-              </ul>
-            </div>
-            <div>
-              <h4 className="font-semibold text-blue-700 mb-2">Immigration (General)</h4>
-              <ul className="text-sm space-y-1">
-                <li>• Skilled Migration: 6.0-7.0</li>
-                <li>• Student Visa: 5.5-6.0</li>
-                <li>• Work Visa: 6.0-7.0</li>
-              </ul>
-            </div>
-            <div>
-              <h4 className="font-semibold text-purple-700 mb-2">Professional Bodies</h4>
-              <ul className="text-sm space-y-1">
-                <li>• Medical/Nursing: 7.0-7.5</li>
-                <li>• Engineering: 6.0-7.0</li>
-                <li>• Teaching: 7.0-8.0</li>
-              </ul>
             </div>
           </div>
         </div>
 
         {/* Action Buttons */}
-        <div className="text-center space-y-4">
+        <div className="text-center space-y-4 pt-4 border-t border-gray-200">
           <button
             onClick={onReset}
-            className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-8 rounded-lg transition-colors mr-4"
+            className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-4 px-10 rounded-xl transition-all shadow-lg hover:shadow-xl hover:-translate-y-1"
           >
-            Take Another Test
+            Return to Practice Hub
           </button>
-
-          <div className="text-sm text-gray-500">
-            <p>Want to improve your score? Regular practice is key to IELTS success!</p>
-          </div>
         </div>
       </div>
     </div>

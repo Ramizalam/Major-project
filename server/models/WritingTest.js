@@ -1,20 +1,16 @@
 const mongoose = require('mongoose');
 
 const WritingTestSchema = new mongoose.Schema({
+  title: String,
   task1: {
-    title: String,
-    time: String,
-    wordCount: Number,
-    instructions: String,
-    chartDescription: String,
+    prompt: String,
+    minWords: Number,
+    imageUrl: String
   },
   task2: {
-    title: String,
-    time: String,
-    wordCount: Number,
-    question: String,
-    tips: [String],
-  },
+    prompt: String,
+    minWords: Number
+  }
 });
 
 module.exports = mongoose.model('WritingTest', WritingTestSchema);

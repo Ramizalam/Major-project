@@ -1,325 +1,219 @@
-import React, { useState, useEffect } from 'react';
-import { Headphones, Play, Pause, Volume2 } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { motion } from 'framer-motion';
+import { Headphones, AlertCircle, Play, Pause, ChevronRight, ArrowLeft, Loader } from 'lucide-react';
+import axios from 'axios';
 import Timer from './Timer';
 
 interface ListeningModuleProps {
+  testId?: string;
   onComplete: (results: { score: number; answers: (string | number)[]; timeSpent: number }) => void;
+  onCancel?: () => void;
 }
 
-const ListeningModule: React.FC<ListeningModuleProps> = ({ onComplete }) => {
-  const [currentSection, setCurrentSection] = useState(1);
-  const [answers, setAnswers] = useState<(string | number)[]>(Array(40).fill(''));
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [audioRef, setAudioRef] = useState<HTMLAudioElement | null>(null);
-  const [timeSpent, setTimeSpent] = useState(0);
+const ListeningModule: React.FC<ListeningModuleProps> = ({ testId, onComplete, onCancel }) => {
+  const [test, setTest] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [listeningTest, setListeningTest] = useState<any>(null);
+  const [error, setError] = useState('');
+  const [answers, setAnswers] = useState<Record<string, string>>({});
+  const [isPlaying, setIsPlaying] = useState(false);
+  const audioRef = useRef<HTMLAudioElement>(null);
+  
+  // States for showing results
+  const [submitted, setSubmitted] = useState(false);
+  const [finalScore, setFinalScore] = useState(0);
 
-  // Fetch test data from backend
   useEffect(() => {
-    const fetchData = async () => {
+    let isMounted = true;
+    const fetchTest = async () => {
       try {
         setLoading(true);
-        setError(null);
-        const baseUrl = import.meta.env?.VITE_API_URL || 'http://localhost:5000';
-        const res = await fetch(`${baseUrl}/api/listening`);
-        if (!res.ok) throw new Error(`Failed to load listening data (${res.status})`);
-        const data = await res.json();
-        setListeningTest(data);
-      } catch (e: any) {
-        setError(e.message || 'Error fetching listening data');
+        const url = testId ? `http://localhost:5000/api/listening/${testId}` : 'http://localhost:5000/api/listening';
+        const res = await axios.get(url);
+        const testData = Array.isArray(res.data) ? res.data[0] : res.data;
+        
+        if (!testData) throw new Error('No listening test found');
+        if (isMounted) setTest(testData);
+      } catch (err: any) {
+        if (isMounted) setError(err.message || 'Failed to load test');
       } finally {
-        setLoading(false);
+        if (isMounted) setLoading(false);
       }
     };
-    fetchData();
-  }, []);
+    fetchTest();
+    return () => { isMounted = false; };
+  }, [testId]);
 
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setTimeSpent(prev => prev + 1);
-    }, 1000);
-    return () => clearInterval(interval);
-  }, []);
-
-  const handleAnswerChange = (questionIndex: number, value: string | number) => {
-    const newAnswers = [...answers];
-    newAnswers[questionIndex] = value;
-    setAnswers(newAnswers);
-  };
-
-  const toggleAudio = () => {
-    if (audioRef) {
-      if (isPlaying) {
-        audioRef.pause();
-      } else {
-        audioRef.play();
-      }
+  const togglePlay = () => {
+    if (audioRef.current) {
+      if (isPlaying) audioRef.current.pause();
+      else audioRef.current.play();
       setIsPlaying(!isPlaying);
     }
   };
 
-  const handleAudioEnded = () => {
-    setIsPlaying(false);
-  };
+  const submitTest = () => {
+    if (!test) return;
+    let score = 0;
+    const finalAnswers: string[] = [];
 
-  const getAudioSource = () => {
-    const baseUrl = import.meta.env?.VITE_API_URL || 'http://localhost:5000';
-    switch (currentSection) {
-      case 1:
-        return `${baseUrl}/public/Librarian audio.mp3`;
-      case 2:
-        return `${baseUrl}/public/museum audio.mp3`;
-      case 3:
-        return `${baseUrl}/public/Research project.mp3`;
-      case 4:
-        return `${baseUrl}/public/Lecture audio.mp3`;
-      default:
-        return `${baseUrl}/public/Librarian audio.mp3`;
-    }
-  };
-
-  const getAudioLabel = () => {
-    switch (currentSection) {
-      case 1:
-        return 'Library Audio';
-      case 2:
-        return 'Museum Audio';
-      case 3:
-        return 'Research Project Audio';
-      case 4:
-        return 'Lecture Audio';
-      default:
-        return 'Library Audio';
-    }
-  };
-
-  const calculateScore = () => {
-    if (!listeningTest || !listeningTest.correctAnswers) return 0;
-    let correct = 0;
-    answers.forEach((answer, index) => {
-      const userAnswer = typeof answer === 'string' ? answer.toLowerCase().trim() : answer.toString();
-      const correctAnswerItem = listeningTest.correctAnswers[index];
-      const correctAnswer = correctAnswerItem ? correctAnswerItem.toString().toLowerCase() : '';
-
-      if (userAnswer === correctAnswer && correctAnswer !== '') {
-        correct++;
-      }
+    test.sections.forEach((section: any) => {
+      section.questions.forEach((q: any) => {
+        // Use q.number as the key to perfectly match the DetailedReview component
+        const storedAnswer = answers[q.number] || '';
+        const userAnswer = storedAnswer.trim().toLowerCase();
+        
+        finalAnswers.push(userAnswer);
+        
+        // Ensure correctAnswer exists and compare safely
+        if (q.correctAnswer && userAnswer === q.correctAnswer.trim().toLowerCase()) {
+            score++;
+        }
+      });
     });
-    return correct;
-  };
 
-  const convertToIELTSBand = (rawScore: number) => {
-    const bandTable = {
-      39: 9.0, 37: 8.5, 35: 8.0, 32: 7.5, 30: 7.0,
-      26: 6.5, 23: 6.0, 18: 5.5, 16: 5.0, 13: 4.5,
-      10: 4.0, 8: 3.5, 6: 3.0, 4: 2.5, 3: 2.0
-    };
-
-    for (const [score, band] of Object.entries(bandTable)) {
-      if (rawScore >= parseInt(score)) {
-        return band;
-      }
-    }
-    return 1.0;
-  };
-
-  const handleSubmit = () => {
-    const rawScore = calculateScore();
-    const bandScore = convertToIELTSBand(rawScore);
-    onComplete({ score: bandScore, answers, timeSpent });
-  };
-
-  const renderQuestions = (startIndex: number, endIndex: number) => {
-    const questions = [];
-    for (let i = startIndex; i <= endIndex; i++) {
-      const questionNum = i + 1;
-      questions.push(
-        <div key={i} className="mb-4">
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            {questionNum}. {getQuestionText(i)}
-          </label>
-          {getQuestionInput(i, questionNum)}
-        </div>
-      );
-    }
-    return questions;
-  };
-
-  const getQuestionText = (index: number) => {
-    if (!listeningTest || !listeningTest.questionTexts) return `Question ${index + 1} - Complete the notes`;
-    let sectionNum = 1;
-    if (index >= 10 && index < 20) sectionNum = 2;
-    else if (index >= 20 && index < 30) sectionNum = 3;
-    else if (index >= 30 && index < 40) sectionNum = 4;
-
-    if (listeningTest.questionTexts[sectionNum]) {
-      const questionIndex = index % 10;
-      return listeningTest.questionTexts[sectionNum][questionIndex] || `Question ${index + 1} - Complete the notes`;
-    }
-    return `Question ${index + 1} - Complete the notes`;
-  };
-
-  const getQuestionInput = (index: number, questionNum: number) => {
-    let sectionNum = 1;
-    if (index >= 10 && index < 20) sectionNum = 2;
-    else if (index >= 20 && index < 30) sectionNum = 3;
-    else if (index >= 30 && index < 40) sectionNum = 4;
-
-    const questionIndex = index % 10;
-
-    let options = null;
-    if (listeningTest && listeningTest.questionOptions && listeningTest.questionOptions[sectionNum]) {
-      const sectionOptions = listeningTest.questionOptions[sectionNum];
-      if (sectionOptions && sectionOptions[questionIndex]) {
-        options = sectionOptions[questionIndex];
-      }
+    setFinalScore(score);
+    setSubmitted(true);
+    
+    // Stop audio when test is submitted
+    if (audioRef.current && isPlaying) {
+      audioRef.current.pause();
+      setIsPlaying(false);
     }
 
-    if (options && Array.isArray(options) && options.length > 0) {
-      return (
-        <div className="space-y-2">
-          {options.map((option, optionIndex) => {
-            const letter = String.fromCharCode(65 + optionIndex);
-            return (
-              <label key={letter} className="flex items-center">
-                <input
-                  type="radio"
-                  name={`q${questionNum}`}
-                  value={letter}
-                  onChange={(e) => handleAnswerChange(index, e.target.value)}
-                  className="mr-2"
-                />
-                <span className="text-sm">{letter}) {option}</span>
-              </label>
-            );
-          })}
-        </div>
-      );
-    }
+    onComplete({ score, answers: finalAnswers, timeSpent: 1800 });
+  };
 
+  if (loading) return <div className="flex justify-center py-20"><Loader className="animate-spin text-indigo-600" size={40} /></div>;
+  if (error || !test) return <div className="text-center text-red-600 py-20"><AlertCircle size={48} className="mx-auto mb-4" /><p>{error}</p></div>;
+
+  // --- RESULTS VIEW ---
+  if (submitted) {
     return (
-      <input
-        type="text"
-        value={answers[index]}
-        onChange={(e) => handleAnswerChange(index, e.target.value)}
-        className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-        placeholder="Enter your answer"
-      />
+      <div className="max-w-7xl mx-auto px-4 py-8">
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 text-center mb-8">
+          <h2 className="text-3xl font-bold text-gray-900 mb-4">Listening Test Complete</h2>
+          <div className="text-6xl font-bold text-blue-600 mb-4">
+            {finalScore} <span className="text-2xl text-gray-500">/ {test.sections.reduce((acc: number, sec: any) => acc + sec.questions.length, 0)}</span>
+          </div>
+          <p className="text-gray-600 mb-8">
+            You have completed the listening test. Review your answers below.
+          </p>
+          <button
+            onClick={() => window.location.href = '/'} // Redirects to home/dashboard
+            className="bg-blue-600 text-white px-8 py-3 rounded-lg font-bold hover:bg-blue-700 transition-colors"
+          >
+            Return to Dashboard
+          </button>
+        </div>
+
+        {/* Detailed Review Component */}
+        <DetailedReview 
+          sections={test.sections} 
+          userAnswers={answers} 
+        />
+      </div>
     );
-  };
+  }
+
+  // --- ACTIVE TEST VIEW ---
+  const section = test.sections[0];
+  
+  // FIX: Force React to fetch the audio from the backend server running on port 5000
+  const rawAudioUrl = section?.audioUrl || test.audioUrl;
+  const audioUrl = rawAudioUrl.startsWith('http') ? rawAudioUrl : `http://localhost:5000${rawAudioUrl}`;
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8">
-      <div className="max-w-4xl mx-auto px-6">
-        {/* Header */}
-        <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-3">
-              <Headphones className="w-8 h-8 text-blue-600" />
-              <div>
-                <h1 className="text-2xl font-bold text-gray-800">IELTS Listening Test</h1>
-                <p className="text-gray-600">40 questions • 30 minutes + 10 minutes transfer time</p>
-              </div>
+    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="max-w-5xl mx-auto p-6">
+      <div className="bg-white rounded-3xl shadow-2xl overflow-hidden border border-slate-100">
+        
+        <div className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-6 flex justify-between items-center">
+          <div className="flex items-center gap-3">
+             {onCancel && (
+              <button onClick={onCancel} title="Back to Dashboard" className="mr-2 hover:bg-white/20 p-2 rounded-full transition-colors flex items-center justify-center">
+                <ArrowLeft size={24} />
+              </button>
+            )}
+            <Headphones size={28} />
+            <h2 className="text-2xl font-bold">{test.title}</h2>
+          </div>
+          <Timer initialSeconds={1800} onTimeUp={submitTest} />
+        </div>
+
+        <div className="p-8 bg-slate-50 border-b border-slate-200 flex flex-col md:flex-row items-center justify-between gap-6">
+          <div>
+            <h3 className="text-xl font-bold text-slate-800 mb-2">Test Audio</h3>
+            <p className="text-slate-500">Listen carefully. You will hear the recording only once.</p>
+          </div>
+          
+          <div className="flex items-center gap-4 bg-white px-6 py-4 rounded-full shadow-md border border-slate-200">
+            <button onClick={togglePlay} className="flex items-center justify-center w-14 h-14 bg-indigo-600 text-white rounded-full hover:bg-indigo-700 transition shadow-lg hover:scale-105">
+              {isPlaying ? <Pause size={24} /> : <Play size={24} className="ml-1" />}
+            </button>
+            <div className="text-slate-600 font-medium w-32 text-center">
+              {isPlaying ? "Playing..." : "Paused"}
             </div>
-            <Timer duration={40 * 60} onTimeUp={handleSubmit} />
+            {/* The Audio Player */}
+            <audio 
+              ref={audioRef} 
+              src={audioUrl} 
+              onEnded={() => setIsPlaying(false)} 
+              className="hidden" 
+            />
           </div>
         </div>
 
-        {loading && (
-          <div className="bg-white rounded-lg shadow-md p-6 text-center text-gray-600">Loading listening data...</div>
-        )}
-        {error && (
-          <div className="bg-red-50 border border-red-200 text-red-700 rounded-lg p-4 mb-6">{error}</div>
-        )}
-
-        {!loading && !error && listeningTest && listeningTest.sections && listeningTest.sections.length > 0 && (
-          <>
-            {/* Audio Player */}
-            <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold">Audio Player</h3>
-                <div className="flex items-center space-x-2">
-                  <Volume2 className="w-5 h-5 text-gray-500" />
-                  <span className="text-sm text-gray-500">{getAudioLabel()}</span>
-                </div>
+        <div className="p-8 bg-white h-[55vh] overflow-y-auto">
+          <h3 className="text-lg font-bold mb-6 text-slate-800 border-b pb-2">Questions</h3>
+          <div className="space-y-8">
+            {section.questions.map((q: any, idx: number) => (
+              <div key={q.number || idx} className="p-6 bg-slate-50 rounded-2xl border border-slate-200 shadow-sm hover:border-indigo-300 transition-colors">
+                <p className="font-semibold text-slate-800 mb-5 text-lg">
+                  <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-indigo-100 text-indigo-700 font-bold mr-3 text-sm">
+                    {q.number}
+                  </span>
+                  {q.text}
+                </p>
+                
+                {q.type === 'multiple_choice' ? (
+                  <div className="space-y-3 ml-11">
+                    {q.options?.map((opt: string, i: number) => (
+                      <label key={i} className="flex items-center gap-3 cursor-pointer group bg-white p-3 rounded-xl border border-slate-200 hover:bg-indigo-50 transition-colors">
+                        <input 
+                          type="radio" 
+                          name={`q_${q.number}`} 
+                          value={opt} 
+                          // Saving via q.number to ensure DetailedReview matches it exactly
+                          checked={answers[q.number] === opt} 
+                          onChange={(e) => setAnswers({...answers, [q.number]: e.target.value})} 
+                          className="w-5 h-5 text-indigo-600 focus:ring-indigo-500" 
+                        />
+                        <span className="text-slate-700 group-hover:text-indigo-900 font-medium">{opt}</span>
+                      </label>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="ml-11">
+                    <input 
+                      type="text" 
+                      value={answers[q.number] || ''} 
+                      onChange={(e) => setAnswers({...answers, [q.number]: e.target.value})} 
+                      placeholder="Type your exact answer..." 
+                      className="w-full md:w-1/2 px-4 py-3 border-2 border-slate-200 rounded-xl focus:ring-4 focus:ring-indigo-100 focus:border-indigo-500 transition-all font-medium text-slate-700" 
+                    />
+                  </div>
+                )}
               </div>
+            ))}
+          </div>
+        </div>
 
-              <div className="bg-gray-100 rounded-lg p-4">
-                <audio
-                  ref={setAudioRef}
-                  onEnded={handleAudioEnded}
-                  className="w-full mb-4"
-                  controls
-                  key={currentSection}
-                >
-                  <source src={getAudioSource()} type="audio/mpeg" />
-                  Your browser does not support the audio element.
-                </audio>
-
-                <div className="flex items-center justify-center space-x-4">
-                  <button
-                    onClick={toggleAudio}
-                    className="flex items-center space-x-2 bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors"
-                  >
-                    {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
-                    <span>{isPlaying ? 'Pause' : 'Play'} Audio</span>
-                  </button>
-                </div>
-                <div className="mt-4 bg-blue-100 text-blue-800 text-sm p-3 rounded">
-                  <p><strong>Note:</strong> In the actual IELTS test, audio will play automatically and cannot be paused or replayed.
-                    This practice version allows you to control playback for learning purposes.</p>
-                </div>
-              </div>
-            </div>
-
-            {/* Section Navigation */}
-            <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="text-lg font-semibold">Test Sections</h3>
-                <div className="flex space-x-2">
-                  {[1, 2, 3, 4].map(num => (
-                    <button
-                      key={num}
-                      onClick={() => setCurrentSection(num)}
-                      className={`px-3 py-1 rounded-md text-sm font-medium ${currentSection === num
-                          ? 'bg-blue-600 text-white'
-                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                        }`}
-                    >
-                      Section {num}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="bg-blue-50 rounded-lg p-4">
-                <h4 className="font-semibold text-blue-800">{listeningTest.sections[currentSection - 1]?.title}</h4>
-                <p className="text-blue-700 text-sm mt-1">{listeningTest.sections[currentSection - 1]?.description}</p>
-                <p className="text-blue-600 text-sm mt-2">Questions: {listeningTest.sections[currentSection - 1]?.questions}</p>
-              </div>
-            </div>
-
-            {/* Questions */}
-            <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-              <h3 className="text-lg font-semibold mb-6">Section {currentSection} Questions</h3>
-              {renderQuestions((currentSection - 1) * 10, currentSection * 10 - 1)}
-            </div>
-
-            {/* Submit Button */}
-            <div className="text-center">
-              <button
-                onClick={handleSubmit}
-                className="bg-green-600 hover:bg-green-700 text-white font-semibold py-3 px-8 rounded-lg transition-colors"
-              >
-                Complete Listening Test
-              </button>
-            </div>
-          </>
-        )}
+        <div className="bg-slate-50 border-t border-slate-200 p-6 flex justify-end">
+           <button onClick={submitTest} className="px-10 py-4 bg-green-600 hover:bg-green-700 text-white rounded-xl font-bold shadow-[0_0_20px_rgba(22,163,74,0.4)] transition-transform hover:scale-105 text-lg flex items-center gap-2">
+             Submit Test <ChevronRight size={24} />
+           </button>
+        </div>
       </div>
-    </div>
+    </motion.div>
   );
 };
 
